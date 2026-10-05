@@ -1,0 +1,216 @@
+/*
+ * Design tokens. Components never use raw color values; everything goes
+ * through the variables here.
+ *
+ * The look is a warung: receipt paper, a painted menu board, turmeric,
+ * sambal, and banana leaf. Controls are chunky and pressable, with an ink
+ * outline and a hard "lip" of shadow that gives way when pressed.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Paper and ink */
+  --paper: #fbf2df; /*        the page: receipt paper */
+  --paper-deep: #f1e2c1; /*   sunken areas */
+  --surface: #fffcf4; /*      cards */
+  --ink: #2a1b12; /*          text and outlines: sweet soy sauce */
+  --ink-soft: #5e4a3b; /*     secondary text, 7.5:1 on paper */
+  --line-soft: #d8c6a2; /*    quiet dividers */
+
+  /* Turmeric, sambal, banana leaf */
+  --kunyit: #f2a91e;
+  --kunyit-deep: #b87400;
+  --kunyit-soft: #fde8b4;
+  --sambal: #c5301c;
+  --sambal-text: #9e2414; /*  6.9:1 on paper */
+  --sambal-soft: #fbdcd5;
+  --daun: #2c7a4b;
+  --daun-text: #1f6238; /*    6.6:1 on paper */
+  --daun-soft: #d8eed9;
+  --biru: #2a6f97; /*         the blue of a plastic water jug */
+  --biru-soft: #d9ebf5;
+
+  /* The signboard and the awning: brick red and cream, the colors of a painted warung sign */
+  --bata: #b8361f;
+  --bata-deep: #8f2715;
+  --krem: #fff4dc; /*         5.5:1 on brick red */
+
+  /* The warung itself */
+  --toska: #1f8f8b; /*        the blue-green paint of a warung front */
+  --toska-deep: #156b68;
+  --genteng: #c8693a; /*      clay roof tiles */
+  --genteng-deep: #a14f28;
+  --ojol: #1ea653; /*         the jacket of an ojek driver */
+  --daun-muda: #4b9e56; /*    young palm fronds */
+
+  /* The street scene */
+  --kayu: #d9a066; /*         light wood: the counter top, a parcel of food */
+  --teh: #7a4a2a; /*          dark wood: a palm trunk, a power pole */
+  --tanah: #ead7ae; /*        the pavement */
+  --baju-1: #2a6f97;
+  --baju-2: #c5301c;
+  --baju-3: #7b4ea3;
+  --baju-4: #1b8a6b;
+  --baju-5: #d9722b;
+  --baju-6: #3f5c8a;
+  --kulit-1: #e3b083;
+  --kulit-2: #c98e63;
+  --kulit-3: #f0c9a0;
+  --kulit-4: #a9744f;
+
+  /* The menu board */
+  --papan: #1f3327;
+  --papan-raised: #2b4635;
+  --kapur: #f6f0dd; /*        chalk, 11.8:1 on the board */
+  --kapur-soft: #c9d3c3; /*   8.7:1 on the board */
+
+  /* The glow of the sky on the board; see the phases at the end of this file */
+  --langit: rgb(255 255 255 / 0);
+  --bintang: 0; /*            how much of the stars is showing */
+
+  /* Roles */
+  --color-profit: var(--daun-text);
+  --color-loss: var(--sambal-text);
+  --focus: #1b4fd6;
+
+  /*
+   * Customer outcomes, the same four colors everywhere. Taken from the
+   * Okabe-Ito palette, which stays distinguishable with the common forms
+   * of color blindness. They are never the only cue: every use also has a
+   * label, and the charts have a table.
+   */
+  --outcome-served: #1b8a6b;
+  --outcome-reneged: #d55e00;
+  --outcome-balked: #e69f00;
+  --outcome-soldout: #6b7c93;
+
+  /* Typography */
+  --font-display: 'Baloo 2', 'Trebuchet MS', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --text-xs: 0.8125rem; /*  13px, labels only */
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: clamp(2.5rem, 7vw, 4rem);
+
+  /* Spacing, multiples of 4px */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Shape */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --border: 2px;
+  --border-thick: 3px;
+
+  /* Elevation: a hard lip of shadow under an element, not a blur */
+  --lip-sm: 0 2px 0;
+  --lip-md: 0 4px 0;
+  --lip-lg: 0 6px 0;
+  --lip-color: rgb(42 27 18 / 0.22);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-press: 90ms;
+  --dur-fast: 160ms;
+  --dur-view: 280ms;
+
+  /* Stacking order */
+  --z-sticky: 20;
+  --z-header: 40;
+  --z-skip: 100;
+
+  /* Layout */
+  --header-h: 64px;
+  --content-max: 1120px;
+  --gutter: clamp(16px, 4vw, 32px);
+  --target: 44px; /* smallest thing meant to be tapped */
+}
+
+/*
+ * The board by time of day. The header takes the light of the sky outside:
+ * a warm glow at dawn, bright at noon, amber in the afternoon, violet at
+ * dusk, and deep blue with stars at night. Every board color keeps chalk
+ * text above 8:1 and soft chalk above 5.5:1.
+ *
+ * Registering the properties tells the browser they are colors, so that a
+ * change of phase fades instead of jumping. A browser that does not know
+ * @property simply switches at once.
+ */
+@property --papan {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #1f3327;
+}
+
+@property --papan-raised {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2b4635;
+}
+
+@property --langit {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(255 255 255 / 0);
+}
+
+@property --bintang {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+:root {
+  transition:
+    --papan 1400ms ease,
+    --papan-raised 1400ms ease,
+    --langit 1400ms ease,
+    --bintang 1400ms ease;
+}
+
+:root[data-phase='pagi'] {
+  --papan: #24454a;
+  --papan-raised: #2f5a60;
+  --langit: rgb(255 176 92 / 0.55);
+}
+
+:root[data-phase='siang'] {
+  --papan: #25503a;
+  --papan-raised: #30664a;
+  --langit: rgb(255 236 150 / 0.4);
+}
+
+:root[data-phase='sore'] {
+  --papan: #4a3324;
+  --papan-raised: #5e4230;
+  --langit: rgb(255 140 60 / 0.6);
+}
+
+:root[data-phase='petang'] {
+  --papan: #33294a;
+  --papan-raised: #44375f;
+  --langit: rgb(232 110 120 / 0.5);
+  --bintang: 0.35;
+}
+
+:root[data-phase='malam'] {
+  --papan: #1a2238;
+  --papan-raised: #27304c;
+  --langit: rgb(120 150 220 / 0.3);
+  --bintang: 1;
+}

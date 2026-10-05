@@ -1,0 +1,3274 @@
+/*
+ * The header and the four views: front, morning, evening report, and the
+ * end of the game. Written mobile-first; wider layouts are added at 640px
+ * and 960px.
+ */
+
+/* --- The menu board (header) ---------------------------------------------- */
+
+.papan {
+  position: relative;
+  background:
+    radial-gradient(120% 140% at 10% 0%, rgb(255 255 255 / 0.07), transparent 60%),
+    /* The sky outside, low on the horizon: its color follows the time of day. */
+    radial-gradient(70% 150% at 78% 135%, var(--langit), transparent 70%),
+    var(--papan);
+  color: var(--kapur);
+  border-bottom: var(--border-thick) solid var(--ink);
+}
+
+/* Stars, which come out at dusk. */
+.papan::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: var(--bintang);
+  background-image:
+    radial-gradient(1.5px 1.5px at 12% 28%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 27% 68%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 41% 18%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 56% 78%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 68% 32%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 81% 14%, #fff 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 93% 58%, #fff 50%, transparent 51%),
+    radial-gradient(1px 1px at 4% 82%, #fff 50%, transparent 51%);
+  pointer-events: none;
+}
+
+.papan__inner {
+  position: relative;
+}
+
+/* The moon takes the sun's place once the stars are out. */
+.status__moon {
+  display: none;
+}
+
+:root[data-phase='petang'] .status__sun,
+:root[data-phase='malam'] .status__sun {
+  display: none;
+}
+
+:root[data-phase='petang'] .status__moon,
+:root[data-phase='malam'] .status__moon {
+  display: block;
+}
+
+/* A strip of gingham under the board: the tablecloth of every warung. */
+.papan::after {
+  content: '';
+  position: absolute;
+  inset: 100% 0 auto;
+  height: 12px;
+  margin-top: var(--border-thick);
+  background-color: #fffdf6;
+  background-image:
+    linear-gradient(90deg, rgb(197 48 28 / 0.62) 50%, transparent 50%),
+    linear-gradient(rgb(197 48 28 / 0.62) 50%, transparent 50%);
+  background-size: 12px 12px;
+  border-bottom: var(--border) solid var(--ink);
+}
+
+.papan__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-3) var(--gutter);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  color: var(--kapur);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.brand__icon {
+  width: 28px;
+  height: 28px;
+  color: var(--kunyit);
+}
+
+.papan :focus-visible {
+  outline-color: var(--kunyit);
+}
+
+.papan__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.papan__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  min-width: var(--target);
+  justify-content: center;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--kapur);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease-out;
+}
+
+.papan__link:hover {
+  background: var(--papan-raised);
+}
+
+/* A control that shows its icon only, at every width; its words stay available to screen readers. */
+.papan__link--icon {
+  padding: 0;
+}
+
+.papan__link--icon span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Day, cash, reputation: chalked onto the board. */
+.status {
+  display: flex;
+  gap: var(--space-2);
+  order: 3;
+  width: 100%;
+}
+
+.status__item {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 2px dashed rgb(246 240 221 / 0.4);
+  border-radius: var(--radius-sm);
+}
+
+.status__item dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kapur-soft);
+}
+
+.status__item dt .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.status__item dd {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+@media (max-width: 639px) {
+  /* On a phone: name and menu on one line, the three figures on the next. */
+  .brand {
+    font-size: var(--text-md);
+  }
+
+  .brand__icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .papan__nav {
+    gap: 0;
+  }
+
+  /* The menu shows icons only; the words stay available to screen readers. */
+  .papan__link span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .status__item {
+    flex: 1 1 auto;
+    padding-inline: 10px;
+  }
+
+  .status__item dt {
+    white-space: nowrap;
+  }
+
+  .status__item dt .icon {
+    display: none;
+  }
+
+  .status__item dd {
+    font-size: var(--text-md);
+  }
+}
+
+@media (min-width: 640px) {
+  .status {
+    justify-content: center;
+  }
+
+  .status__item {
+    flex: 0 1 auto;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+}
+
+@media (min-width: 1100px) {
+  /* Three columns, the outer two equal, so the figures sit in the true centre. */
+  .papan__inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+  }
+
+  .status {
+    order: 0;
+    width: auto;
+  }
+
+  .status__item {
+    padding-block: var(--space-1);
+  }
+
+  /* The menu keeps to the right-hand column, also when there are no figures in the middle. */
+  .papan__nav {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+
+/* --- Views ---------------------------------------------------------------- */
+
+main {
+  padding-top: 12px; /* the gingham strip */
+}
+
+main:focus {
+  outline: none;
+}
+
+/*
+ * Every screen is one column of blocks, all as wide as the column and with
+ * the same space between them. A block that belongs closely to the one
+ * before it says so itself (see .wallet-note).
+ */
+.view {
+  display: grid;
+  gap: var(--space-6);
+  align-content: start;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding: var(--space-6) var(--gutter) var(--space-8);
+  animation: view-in var(--dur-view) var(--ease-out);
+}
+
+.view > * {
+  min-width: 0;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.view__head {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+  text-align: center;
+}
+
+/* The line over the title belongs to the title. */
+.view__head .eyebrow {
+  margin-bottom: calc(-1 * var(--space-2));
+}
+
+/* What Pak Erlangga says reads as a paragraph, so it stays left-aligned inside its bubble. */
+.view__head .bubble,
+.home__hero .bubble {
+  max-width: 680px;
+  text-align: left;
+}
+
+.section-title {
+  margin-bottom: var(--space-3);
+}
+
+.section-title--center {
+  text-align: center;
+}
+
+.section-lead {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  color: var(--ink-soft);
+}
+
+.section-lead--center {
+  margin-bottom: var(--space-4);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border) solid var(--biru);
+  border-radius: var(--radius-sm);
+  background: var(--biru-soft);
+  font-size: var(--text-sm);
+}
+
+.noscript {
+  max-width: 60ch;
+  margin: var(--space-7) auto;
+  padding: var(--space-5);
+  text-align: center;
+}
+
+/* --- Front ---------------------------------------------------------------- */
+
+.view--home {
+  gap: var(--space-7);
+}
+
+.home__hero {
+  display: grid;
+  gap: var(--space-5);
+  justify-items: center;
+  text-align: center;
+}
+
+/*
+ * The signboard: brick red with cream lettering, the way warung signs are
+ * painted. It hangs over the top edge of the street scene below it.
+ */
+.sign {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  margin-bottom: calc(-1 * var(--space-5));
+  padding: var(--space-4) var(--space-7) var(--space-3);
+  background: var(--bata);
+  color: var(--krem);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--lip-lg) var(--ink);
+  transform: rotate(-1.2deg);
+  animation: sign-in 700ms var(--ease-out) both;
+}
+
+/* Dropped into place from above, with one small swing. */
+@keyframes sign-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-40px) rotate(-6deg);
+  }
+
+  60% {
+    opacity: 1;
+    transform: translateY(4px) rotate(1deg);
+  }
+
+  100% {
+    transform: rotate(-1.2deg);
+  }
+}
+
+.sign::before,
+.sign::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--krem);
+  box-shadow: inset 0 -2px 0 rgb(42 27 18 / 0.35);
+}
+
+.sign::before {
+  left: 16px;
+}
+
+.sign::after {
+  right: 16px;
+}
+
+.sign__eyebrow {
+  font-weight: 800;
+  font-size: var(--text-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--kunyit-soft);
+}
+
+.sign__name {
+  font-size: var(--text-4xl);
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 3px 0 var(--bata-deep);
+}
+
+.home__tagline {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.home__hero .bubble__text {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.home__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.how__steps {
+  display: grid;
+  gap: var(--space-4);
+  counter-reset: step;
+}
+
+.how__step {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  /* Icon and title sit at the same height in every card, however long its text. */
+  align-content: start;
+  text-align: center;
+  counter-increment: step;
+}
+
+.how__step::after {
+  content: counter(step);
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--line-soft);
+}
+
+.how__icon,
+.decision__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--kunyit-soft);
+}
+
+.how__note {
+  max-width: 70ch;
+  margin-inline: auto;
+  color: var(--ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+@media (min-width: 640px) {
+  .how__steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* --- The stage: the street scene, on the front page and during the day ------ */
+
+.stage {
+  width: 100%;
+}
+
+.stage__frame {
+  position: relative;
+  overflow: hidden;
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--lip-lg) var(--ink);
+  background: var(--paper-deep);
+}
+
+.stage__canvas {
+  display: block;
+  width: 100%;
+  height: 280px; /* set precisely by the scene once it knows its width */
+}
+
+.stage__caption {
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Pause or play, in the corner of the scene. */
+.stage__toggle {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  padding: 0 var(--space-4);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease-out;
+}
+
+.stage__toggle:hover {
+  background: var(--kunyit-soft);
+}
+
+.stage--home .stage__toggle {
+  top: var(--space-6);
+}
+
+.stage__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.stage__time {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stage__clock {
+  font-size: var(--text-3xl);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.stage__progress {
+  flex: 1 1 auto;
+  height: 14px;
+  overflow: hidden;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--paper-deep);
+}
+
+.stage__progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--kunyit);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.stage__closed {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: rgb(31 51 39 / 0.9);
+  color: var(--kapur);
+  font-weight: 800;
+  animation: rise-in 300ms var(--ease-out) both;
+}
+
+.stage__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.stage .legend {
+  margin-top: var(--space-4);
+}
+
+/* A choice of one among a few, as a row of joined buttons. */
+.segmented {
+  display: inline-flex;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--lip-md) var(--ink);
+}
+
+.segmented__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.segmented__label {
+  display: grid;
+  place-items: center;
+  min-width: 54px;
+  min-height: var(--target);
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease-out;
+}
+
+@media (max-width: 639px) {
+  .segmented__label {
+    min-width: 48px;
+    padding: 0 var(--space-2);
+  }
+}
+
+.segmented__label:not(:last-child) {
+  border-right: var(--border) solid var(--ink);
+}
+
+.segmented__label:hover {
+  background: var(--kunyit-soft);
+}
+
+.segmented__input:checked + .segmented__label {
+  background: var(--kunyit);
+}
+
+.segmented__input:focus-visible + .segmented__label {
+  outline: 3px solid var(--focus);
+  outline-offset: -4px;
+}
+
+/* The running totals under the scene */
+
+.tally {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* Every tile is built the same: a label, the number, and a note, one line each. */
+.tally__item {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow: var(--lip-sm) var(--lip-color);
+  text-align: center;
+}
+
+.tally__item--revenue {
+  grid-column: 1 / -1;
+}
+
+.tally__item dt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+.tally__item dd {
+  font-size: var(--text-xl);
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.tally__item small {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.tally__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper-deep);
+}
+
+.tally__item--served .tally__dot {
+  background: var(--outcome-served);
+}
+
+.tally__item--reneged .tally__dot {
+  background: var(--outcome-reneged);
+}
+
+.tally__item--balked .tally__dot {
+  background: var(--outcome-balked);
+}
+
+.tally__item--soldout .tally__dot {
+  background: var(--outcome-soldout);
+}
+
+.tally__item--revenue .tally__dot,
+.tally__item--stock .tally__dot,
+.tally__item--arrivals .tally__dot {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .tally {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* Seven items in rows of four: the last one takes the two places left over. */
+  .tally__item--revenue {
+    grid-column: span 2;
+  }
+}
+
+
+/* --- Morning: the desk ---------------------------------------------------- */
+
+.desk {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.desk > * {
+  min-width: 0;
+}
+
+.desk__side {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.decisions {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.decision {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.decision__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.decision__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.decision__control {
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* The control spans its card, so nothing is left hanging to one side. */
+.decision .stepper,
+.decision .slider {
+  max-width: none;
+}
+
+.decisions > * {
+  animation: rise-in 420ms var(--ease-out) both;
+  animation-delay: calc(var(--i) * 60ms);
+}
+
+.decisions > :nth-child(1) {
+  --i: 0;
+}
+
+.decisions > :nth-child(2) {
+  --i: 1;
+}
+
+.decisions > :nth-child(3) {
+  --i: 2;
+}
+
+.decisions > :nth-child(4) {
+  --i: 3;
+}
+
+.decision__help {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.shift-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.shift-grid__item {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.shift-grid__item label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+/* A checkbox drawn as a switch. The real checkbox stays in place, invisible, to take the focus. */
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--target);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.switch__input {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 52px;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch__track {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--paper-deep);
+  transition: background-color var(--dur-fast) ease-out;
+}
+
+.switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.switch__input:checked + .switch__track {
+  background: var(--daun);
+}
+
+.switch__input:checked + .switch__track::after {
+  transform: translateX(22px);
+}
+
+.switch__input:focus-visible + .switch__track {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* The morning receipt and the button that opens the warung */
+
+.nota__subtitle {
+  margin: var(--space-5) 0 var(--space-1);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.cta {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cta__summary {
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
+.cta__blocked {
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--sambal-text);
+}
+
+/* The queue card */
+
+.params {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.param {
+  display: grid;
+  grid-template-columns: 3.6em minmax(0, 1fr);
+  column-gap: var(--space-3);
+  align-items: center;
+  padding-bottom: var(--space-2);
+  border-bottom: 2px dashed var(--line-soft);
+}
+
+/* dt and dd share the row: the symbol on the left spans both lines of text. */
+.param dt {
+  display: contents;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.param dt .chip {
+  grid-row: span 2;
+  justify-content: center;
+  padding-inline: var(--space-1);
+}
+
+.param dd {
+  grid-column: 2;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* Said in passing after the value, and kept in one piece. */
+.param__aside {
+  font-weight: 400;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.queue-card__body {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.queue-card__body > * {
+  min-width: 0;
+}
+
+@media (min-width: 720px) {
+  .queue-card__body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.queue-card__subtitle {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  margin-bottom: var(--space-2);
+}
+
+.capacity-chart {
+  width: 100%;
+  height: auto;
+  max-width: 520px;
+}
+
+.capacity-chart__grid {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+}
+
+.capacity-chart__tick {
+  fill: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.capacity-chart__bar {
+  fill: var(--kunyit);
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+
+/* Hours in which more customers came than could be served. */
+.capacity-chart__bar--over {
+  fill: var(--outcome-reneged);
+}
+
+.capacity-chart__line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  stroke-linejoin: round;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legend__swatch--bar {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  background: var(--kunyit);
+}
+
+.legend__swatch--line {
+  width: 22px;
+  border-top: 2.5px dashed var(--ink);
+}
+
+.legend--center {
+  justify-content: center;
+}
+
+.legend__swatch--patience {
+  width: 22px;
+  height: 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--outcome-served) 62%, var(--surface) 62%);
+}
+
+.legend__swatch--ring {
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--kunyit);
+  border-radius: 50%;
+}
+
+.legend__swatch--angry,
+.legend__swatch--full {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.legend__swatch--angry {
+  background: var(--outcome-reneged);
+  color: #fff;
+}
+
+.legend__swatch--angry::before {
+  content: '!';
+}
+
+.legend__swatch--full {
+  background: var(--outcome-balked);
+}
+
+.legend__swatch--full::before {
+  content: '×';
+}
+
+.legend__swatch--fill {
+  width: 18px;
+  height: 10px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--kunyit);
+}
+
+.legend__swatch--mark {
+  height: 16px;
+  border-left: 3px solid var(--ink);
+}
+
+.legend__swatch--dotted {
+  border-left-style: dotted;
+}
+
+@media (max-width: 959px) {
+  /* On a phone the button that opens the warung stays within reach. */
+  .view--pagi {
+    padding-bottom: 148px;
+  }
+
+  .cta {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: var(--z-sticky);
+    padding: var(--space-3) var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
+    background: var(--paper);
+    border-top: var(--border-thick) solid var(--ink);
+  }
+}
+
+@media (min-width: 640px) {
+  .decisions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+}
+
+@media (min-width: 960px) {
+  /* The choices and what they cost stand side by side, level at the top and at the bottom. */
+  .desk {
+    grid-template-columns: minmax(0, 1fr) 352px;
+  }
+
+  .desk__side {
+    grid-template-rows: 1fr auto;
+    align-content: stretch;
+  }
+
+  /* The receipt right above already shows it. */
+  .cta__summary {
+    display: none;
+  }
+}
+
+/* --- Evening: the report -------------------------------------------------- */
+
+.report {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.report > * {
+  min-width: 0;
+  animation: rise-in 460ms var(--ease-out) both;
+  animation-delay: calc(var(--i) * 80ms);
+}
+
+.report > :nth-child(1) {
+  --i: 0;
+}
+
+.report > :nth-child(2) {
+  --i: 1;
+}
+
+.report > :nth-child(3) {
+  --i: 2;
+}
+
+.report > :nth-child(n + 4) {
+  --i: 3;
+}
+
+.report__pair {
+  display: grid;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.report__pair > * {
+  min-width: 0;
+}
+
+.report__next {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* The day's result, large */
+
+.hero-result {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--lip-lg) var(--ink);
+}
+
+.hero-result--gain {
+  background: var(--daun-soft);
+}
+
+.hero-result--loss {
+  background: var(--sambal-soft);
+}
+
+.hero-result__main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0 var(--space-3);
+}
+
+.hero-result__label {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.hero-result__amount {
+  grid-column: 1 / -1;
+}
+
+.hero-result__amount {
+  font-size: clamp(2rem, 9vw, 3.5rem);
+  font-weight: 500;
+  line-height: 1.05;
+}
+
+.hero-result--gain .hero-result__amount {
+  color: var(--daun-text);
+}
+
+.hero-result--loss .hero-result__amount {
+  color: var(--sambal-text);
+}
+
+/* A rubber stamp, so that gain and loss differ in more than color. */
+.stamp {
+  justify-self: start;
+  padding: 0 var(--space-3);
+  border: 3px solid currentColor;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  line-height: 1.5;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+  opacity: 0.85;
+  animation: stamp-in 360ms 1250ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(2.8);
+  }
+}
+
+/* The receipt comes out of the printer. */
+.view--malam .nota {
+  animation: print 800ms 300ms var(--ease-out) both;
+}
+
+@keyframes print {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.hero-result--gain .stamp {
+  color: var(--daun-text);
+}
+
+.hero-result--loss .stamp {
+  color: var(--sambal-text);
+}
+
+.hero-result__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.hero-result__fact {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+}
+
+.hero-result__fact dt {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.hero-result__fact dd {
+  font-size: var(--text-lg);
+  font-weight: 500;
+}
+
+.hero-result__fact small {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.nota__rows--cash {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--ink);
+}
+
+/* Customers by how their visit ended */
+
+.flowbar {
+  transform-origin: left;
+  animation: grow-x 800ms 450ms var(--ease-out) both;
+  display: flex;
+  height: 28px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+
+.flowbar__part {
+  min-width: 4px;
+}
+
+.flowbar__part + .flowbar__part {
+  border-left: var(--border) solid var(--ink);
+}
+
+.flowbar__part--served,
+.outcome--served .outcome__mark {
+  background: var(--outcome-served);
+}
+
+.flowbar__part--reneged,
+.outcome--reneged .outcome__mark {
+  background: var(--outcome-reneged);
+}
+
+.flowbar__part--balked,
+.outcome--balked .outcome__mark {
+  background: var(--outcome-balked);
+}
+
+.flowbar__part--soldout,
+.outcome--soldout .outcome__mark {
+  background: var(--outcome-soldout);
+}
+
+.outcomes {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.outcome {
+  display: grid;
+  grid-template-columns: auto 3.2em minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.outcome__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  color: #fff;
+}
+
+/* Amber is too light for a white icon. */
+.outcome--balked .outcome__mark {
+  color: var(--ink);
+}
+
+.outcome__count {
+  font-size: var(--text-xl);
+  font-weight: 500;
+  text-align: right;
+}
+
+.outcome__label small {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  line-height: 1.35;
+}
+
+/* Queueing metrics */
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: var(--space-4);
+}
+
+.metric {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  padding: var(--space-4);
+  background: var(--paper);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+}
+
+/* The fifth tile takes a full row, so no row is left half empty. */
+.metric:last-child {
+  grid-column: 1 / -1;
+}
+
+.metric dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 800;
+  font-size: var(--text-sm);
+}
+
+.metric dd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.metric__value {
+  font-size: var(--text-2xl);
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.metric__unit {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.metric__note {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+/* Charts and their tables */
+
+.chart {
+  position: relative;
+  width: 100%;
+}
+
+.chart--tall {
+  height: 320px;
+}
+
+.chart--short {
+  height: 190px;
+}
+
+.chart__summary {
+  margin-bottom: var(--space-4);
+  max-width: 75ch;
+}
+
+.details {
+  margin-top: var(--space-4);
+}
+
+.details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin-top: var(--space-2);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-sm);
+}
+
+.table {
+  font-size: var(--text-sm);
+  min-width: 520px;
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table th:first-child {
+  text-align: left;
+}
+
+.table thead th {
+  background: var(--paper-deep);
+  border-bottom: var(--border) solid var(--ink);
+  font-weight: 800;
+}
+
+.table tbody tr + tr > * {
+  border-top: 1px solid var(--line-soft);
+}
+
+.table tbody th {
+  font-weight: 700;
+}
+
+.trends {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.trend figcaption {
+  font-weight: 800;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-2);
+}
+
+/* The score behind the reputation */
+
+.score {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.score__line {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.score__amount {
+  text-align: right;
+  font-weight: 500;
+}
+
+.score__total {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 2px dashed var(--ink);
+}
+
+.score__total strong {
+  font-size: var(--text-xl);
+  font-weight: 500;
+}
+
+.meter {
+  position: relative;
+  height: 22px;
+  margin: var(--space-5) 0 var(--space-2);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--paper-deep);
+}
+
+.meter__fill {
+  transform-origin: left;
+  animation: grow-x 900ms 500ms var(--ease-out) both;
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--radius-pill);
+  background: var(--kunyit);
+  border-right: var(--border) solid var(--ink);
+}
+
+.meter__marker {
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  width: 0;
+  border-left: 3px solid var(--ink);
+}
+
+.meter__marker--score {
+  border-left-style: dotted;
+}
+
+@media (min-width: 860px) {
+  .report__pair {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  }
+
+  /* Five tiles without a gap: three across, then two sharing the next row. */
+  .metrics {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .metric {
+    grid-column: span 2;
+  }
+
+  .metric:nth-child(n + 4) {
+    grid-column: span 3;
+  }
+
+  .trends {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hero-result {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+    align-items: center;
+    padding: var(--space-6);
+  }
+}
+
+/* --- The end of the game: the certificate ----------------------------------- */
+
+/*
+ * A certificate in the manner of an Indonesian "piagam": cream paper, a
+ * double rule all round with an ornament in each corner, a centered title,
+ * and a signature at the foot.
+ */
+.piagam {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+}
+
+.piagam__frame {
+  position: relative;
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  width: 100%;
+  max-width: 760px;
+  padding: var(--space-7) var(--space-5) var(--space-6);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-sm);
+  background:
+    radial-gradient(circle at 50% 0%, rgb(242 169 30 / 0.16), transparent 60%),
+    var(--krem);
+  box-shadow: var(--lip-lg) var(--ink);
+  text-align: center;
+  animation: rise-in 520ms var(--ease-out) both;
+}
+
+/* The inner rule, and a turmeric ornament in each corner. */
+.piagam__frame::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: var(--border) solid var(--kunyit-deep);
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 0 0, var(--kunyit) 0 14px, transparent 15px),
+    radial-gradient(circle at 100% 0, var(--kunyit) 0 14px, transparent 15px),
+    radial-gradient(circle at 0 100%, var(--kunyit) 0 14px, transparent 15px),
+    radial-gradient(circle at 100% 100%, var(--kunyit) 0 14px, transparent 15px);
+  pointer-events: none;
+}
+
+.piagam__frame > * {
+  position: relative;
+}
+
+.piagam__kicker {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bata-deep);
+}
+
+.piagam__stars {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.piagam__star {
+  width: 52px;
+  height: 52px;
+  fill: var(--paper-deep);
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.piagam__star--on {
+  fill: var(--kunyit);
+}
+
+/* A star that has just been earned drops into its place. */
+.piagam__star--landing {
+  animation: star-land 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes star-land {
+  from {
+    opacity: 0;
+    transform: translateY(-28px) scale(2.2) rotate(-40deg);
+  }
+}
+
+.piagam__title {
+  font-size: var(--text-4xl);
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--bata);
+}
+
+.piagam__to,
+.piagam__for {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+/* The name is written on the line, like a certificate filled in by hand. */
+.piagam__name {
+  width: min(100%, 420px);
+  min-height: var(--target);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-bottom: var(--border) dashed var(--ink);
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  text-align: center;
+}
+
+.piagam__name::placeholder {
+  color: var(--ink-soft);
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+/* One column on a phone, where a full amount needs the whole width; two from there on. */
+.piagam__facts {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-3);
+}
+
+@media (min-width: 520px) {
+  .piagam__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.piagam__fact {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  padding: var(--space-3);
+  border: 2px dashed var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.piagam__fact dt {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.piagam__fact dd {
+  display: grid;
+  gap: 2px;
+}
+
+.piagam__fact .num {
+  font-size: var(--text-xl);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.piagam__fact small {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.piagam__sign {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  text-align: left;
+}
+
+.piagam__sign p {
+  display: grid;
+  line-height: 1.2;
+}
+
+.piagam__sign strong {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.piagam__sign small {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.piagam__next {
+  max-width: 60ch;
+  color: var(--ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+@media (min-width: 720px) {
+  .piagam__frame {
+    padding: var(--space-7) var(--space-7) var(--space-6);
+  }
+}
+
+/* --- The tutorial: stars and the rent rise ------------------------------------ */
+
+.goal__rules {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+}
+
+.goal__rules li {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+.goal__stars,
+.goal__warning {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+}
+
+.goal__stars .icon {
+  width: 22px;
+  height: 22px;
+  fill: var(--kunyit);
+  stroke-width: 1.6;
+}
+
+.goal__warning {
+  justify-self: center;
+  align-items: center;
+  width: 36px;
+  height: 36px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--sambal-soft);
+  color: var(--sambal-text);
+}
+
+@media (min-width: 720px) {
+  .goal__rules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+  }
+}
+
+/* The day the rent goes up, marked on the calendar. */
+.cal__rent {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--sambal);
+  color: #fff;
+}
+
+.cal__rent .icon {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.6;
+}
+
+/* --- Numbers that follow from the player's choices -------------------------- */
+
+/* Marked like a price written in highlighter, so they stand out from the fixed words. */
+.live {
+  display: inline-block;
+  padding: 0 0.4em;
+  border-radius: 6px;
+  background: var(--kunyit-soft);
+  box-shadow: inset 0 -2px 0 var(--kunyit);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* --- The day's event: this morning's news, or a surprise --------------------- */
+
+/*
+ * Everything in the box is centered: what it is, then what it means. The
+ * icon sits in line with the name, so the two read as one heading.
+ */
+.news,
+.happened {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  padding: var(--space-4) var(--space-5);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--biru-soft);
+  box-shadow: var(--lip-md) var(--lip-color);
+  text-align: center;
+}
+
+.news {
+  transform: rotate(-0.4deg);
+  animation: rise-in 480ms var(--ease-out) 120ms both;
+}
+
+.happened {
+  width: 100%;
+}
+
+/* A surprise is louder than a piece of news. */
+.happened--surprise {
+  background: var(--sambal-soft);
+}
+
+.news__title,
+.happened__title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.happened__title {
+  font-size: var(--text-lg);
+}
+
+.news__icon,
+.happened__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.happened__icon {
+  width: 34px;
+  height: 34px;
+}
+
+.news__text,
+.happened__text {
+  max-width: 62ch;
+  text-wrap: balance;
+}
+
+.happened__text {
+  font-size: var(--text-sm);
+}
+
+.news__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #174a68;
+}
+
+
+/* --- Morning: the way to the shop next door ---------------------------------- */
+
+.teaser {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
+  align-items: center;
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 14px, rgb(242 169 30 / 0.12) 14px 28px),
+    var(--surface);
+}
+
+.teaser__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--bata);
+  color: var(--krem);
+  box-shadow: var(--lip-sm) var(--ink);
+  transform: rotate(-4deg);
+}
+
+.teaser__icon .icon {
+  width: 1.75em;
+  height: 1.75em;
+}
+
+.teaser__body {
+  display: grid;
+  gap: 2px;
+}
+
+.teaser__body h2 {
+  font-size: var(--text-xl);
+  line-height: 1.2;
+}
+
+.teaser__body p {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.teaser__body .teaser__basket {
+  margin-top: var(--space-1);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.teaser__go {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 640px) {
+  .teaser {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .teaser__go {
+    grid-column: auto;
+  }
+}
+
+.card__lead {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+/* --- The shop next door ------------------------------------------------------ */
+
+.toko__tagline {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--ink-soft);
+  text-wrap: balance;
+}
+
+/* The wallet stays in sight while the shelves scroll past. */
+.wallet {
+  position: sticky;
+  top: var(--space-2);
+  z-index: var(--z-sticky);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--papan);
+  color: var(--kapur);
+  box-shadow: var(--lip-md) var(--ink);
+}
+
+.wallet__figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.wallet__figure dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--kapur-soft);
+}
+
+.wallet__figure dd {
+  font-size: var(--text-md);
+  white-space: nowrap;
+}
+
+.wallet__figure--left dd {
+  font-weight: 500;
+}
+
+.wallet .live {
+  background: var(--kunyit);
+  box-shadow: none;
+}
+
+.wallet dd.is-loss .live {
+  background: var(--sambal-soft);
+  color: var(--sambal-text);
+}
+
+/* The note under the wallet belongs to it, so it sits closer than a block of its own. */
+.wallet-note {
+  margin-top: calc(var(--space-3) - var(--space-6));
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.wallet-note.is-loss {
+  font-weight: 700;
+}
+
+@media (min-width: 600px) {
+  .wallet__figures {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 860px) {
+  .wallet__figure dd {
+    font-size: var(--text-lg);
+  }
+}
+
+.wares {
+  display: grid;
+  gap: var(--space-5);
+}
+
+@media (min-width: 640px) {
+  .wares {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Five things in two columns: the last one sits in the middle, not off to one side. */
+@media (min-width: 640px) and (max-width: 999px) {
+  .wares > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc(50% - var(--space-3));
+  }
+}
+
+/*
+ * Five things in rows of three: three on top and two centered under them.
+ * Each card takes two of six columns, and the fourth starts one column in.
+ */
+@media (min-width: 1000px) {
+  .wares {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .wares > * {
+    grid-column: span 2;
+  }
+
+  .wares > :nth-child(3n + 4):nth-last-child(2) {
+    grid-column: 2 / span 2;
+  }
+}
+
+/* One thing on the shelf. */
+/* A column: the description takes the room left over, so every card ends with its button. */
+.ware {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) ease-out;
+  animation: rise-in 420ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+.wares > :nth-child(2) {
+  --i: 1;
+}
+
+.wares > :nth-child(3) {
+  --i: 2;
+}
+
+.wares > :nth-child(4) {
+  --i: 3;
+}
+
+.wares > :nth-child(5) {
+  --i: 4;
+}
+
+/* It leans toward the pointer (see tilt() in motion.js), and lifts when hovered. */
+.ware {
+  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+}
+
+@media (hover: hover) {
+  .ware:hover {
+    transform: perspective(900px) translateY(-5px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+    box-shadow: 0 9px 0 var(--lip-color);
+  }
+
+  .ware:hover .ware__icon {
+    transform: rotate(-8deg) scale(1.06);
+  }
+}
+
+.ware--chosen {
+  background: var(--daun-soft);
+  border-color: var(--daun-text);
+}
+
+.ware__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ware__icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--kunyit-soft);
+  box-shadow: var(--lip-sm) var(--ink);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.ware__icon .icon {
+  width: 2em;
+  height: 2em;
+}
+
+/* A price tag on a string. */
+.ware__price {
+  position: relative;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-5);
+  border: var(--border) solid var(--ink);
+  border-radius: 6px var(--radius-sm) var(--radius-sm) 6px;
+  background: var(--kunyit);
+  font-weight: 500;
+  white-space: nowrap;
+  transform: rotate(3deg);
+}
+
+.ware__price::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+  transform: translateY(-50%);
+}
+
+.ware__price small {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.ware__name {
+  font-size: var(--text-xl);
+  line-height: 1.2;
+}
+
+.ware__effect {
+  flex: 1 1 auto;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.ware__change {
+  padding: var(--space-2) var(--space-3);
+  border: 2px dashed var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  line-height: 1.9;
+}
+
+.ware--chosen .ware__change {
+  border-color: var(--daun-text);
+  background: var(--surface);
+}
+
+.ware__before {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.ware__buy {
+  width: 100%;
+}
+
+.ware .stepper {
+  max-width: none;
+}
+
+.ware__reason {
+  min-height: 1.4em;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--sambal-text);
+  text-align: center;
+}
+
+.ware__reason:empty {
+  display: none;
+}
+
+.ware__owned {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  font-weight: 800;
+  color: var(--daun-text);
+}
+
+/* Stuck across the corner once the item is in the basket. */
+.ware__ribbon {
+  position: absolute;
+  top: -12px;
+  left: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--daun);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 800;
+  transform: rotate(-3deg);
+  animation: ribbon-in 260ms var(--ease-out) both;
+}
+
+.ware__ribbon[hidden] {
+  display: none;
+}
+
+@keyframes ribbon-in {
+  from {
+    opacity: 0;
+    transform: rotate(-12deg) scale(1.6);
+  }
+}
+
+/* Training: one pip per level. */
+.pips {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.pips__pip {
+  width: 28px;
+  height: 10px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+
+.pips__pip--done {
+  background: var(--daun);
+}
+
+.toko__back {
+  display: flex;
+  justify-content: center;
+}
+
+/* --- Front: how to play ------------------------------------------------------- */
+
+.guide {
+  display: grid;
+  gap: var(--space-6);
+  scroll-margin-top: var(--space-4);
+}
+
+.guide > .section-title {
+  margin-bottom: 0;
+  font-size: var(--text-3xl);
+}
+
+.guide > .section-title:focus {
+  outline: none;
+}
+
+.guide__lead {
+  margin-top: calc(-1 * var(--space-5));
+  color: var(--ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.guide__block {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.guide__title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-size: var(--text-xl);
+  text-align: center;
+}
+
+.guide__number {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--bata);
+  color: var(--krem);
+  font-size: var(--text-lg);
+  line-height: 1;
+  box-shadow: var(--lip-sm) var(--ink);
+}
+
+.guide__text {
+  color: var(--ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* The goal, and the three figures on the board */
+.goal {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+  text-align: center;
+}
+
+.goal__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--kunyit);
+}
+
+.goal__icon .icon {
+  width: 1.75em;
+  height: 1.75em;
+}
+
+.goal__text {
+  max-width: 44ch;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.goal__figures {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--papan);
+  color: var(--kapur);
+  text-align: left;
+}
+
+.goal__figure dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 800;
+}
+
+.goal__figure dd {
+  font-size: var(--text-sm);
+  color: var(--kapur-soft);
+}
+
+@media (min-width: 640px) {
+  .goal__figures {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* What the marks in the scene mean */
+.marks {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.mark {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4);
+}
+
+.mark p {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.figure {
+  width: 72px;
+  height: 81px;
+  border-radius: var(--radius-sm);
+  background: var(--tanah);
+}
+
+@media (min-width: 640px) {
+  .marks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Seven marks in two columns: the last one sits in the middle, not off to one side. */
+@media (min-width: 640px) and (max-width: 999px) {
+  .marks > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc(50% - var(--space-2));
+  }
+}
+
+@media (min-width: 1000px) {
+  .marks {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* Seven marks: the last one sits in the middle of its row. */
+  .marks > :last-child:nth-child(3n + 1) {
+    grid-column: 2;
+  }
+}
+
+/* Events */
+.happenings {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* The two boxes are the same height; their lists start at the top. */
+.happenings__group {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  background: var(--biru-soft);
+}
+
+.happenings__group--surprise {
+  background: var(--sambal-soft);
+}
+
+.happenings__group h4 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.happenings__lead {
+  font-size: var(--text-sm);
+}
+
+.happenings__list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.happening {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.happening__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+}
+
+.happening p {
+  font-size: var(--text-sm);
+}
+
+@media (min-width: 760px) {
+  .happenings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The glossary */
+.guide__glossary {
+  width: 100%;
+  margin: 0;
+  padding: var(--space-2) var(--space-5);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--lip-md) var(--lip-color);
+}
+
+.guide__glossary[open] {
+  padding-bottom: var(--space-5);
+}
+
+/* Inside the box the note starts at the left edge, like the list under it. */
+.guide__glossary .guide__text {
+  max-width: none;
+  margin: var(--space-2) 0 var(--space-4);
+  text-align: left;
+}
+
+.glossary {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.glossary__item dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 800;
+}
+
+.glossary__item dd {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+@media (min-width: 640px) {
+  .glossary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4) var(--space-5);
+  }
+}
+
+/* --- The fourteen days as a wall calendar ------------------------------------ */
+
+.cal {
+  width: 100%;
+}
+
+.cal__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.cal__day {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 1px;
+  min-height: 52px;
+  padding: var(--space-1);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  line-height: 1.1;
+  text-decoration: none;
+}
+
+a.cal__day {
+  box-shadow: var(--lip-sm) var(--lip-color);
+  transition:
+    transform var(--dur-press) ease-out,
+    box-shadow var(--dur-press) ease-out;
+}
+
+a.cal__day:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 0 var(--lip-color);
+}
+
+a.cal__day:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.cal__number {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.cal__day--gain {
+  background: var(--daun-soft);
+  border-color: var(--daun-text);
+}
+
+.cal__day--loss {
+  background: var(--sambal-soft);
+  border-color: var(--sambal-text);
+}
+
+/* The stamp: plus for a profit, minus for a loss, so the color is not the only cue. */
+.cal__stamp {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.cal__stamp .icon {
+  width: 14px;
+  height: 14px;
+  stroke-width: 3.2;
+}
+
+.cal__day--gain .cal__stamp {
+  background: var(--daun);
+}
+
+.cal__day--loss .cal__stamp {
+  background: var(--sambal);
+}
+
+.cal__day--fresh .cal__stamp {
+  animation: ribbon-in 420ms var(--ease-out) 500ms both;
+}
+
+.cal__amount {
+  display: none;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* What happened that day, pinned to the corner. */
+.cal__event {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--kunyit);
+  color: var(--ink);
+}
+
+.cal__event .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* The report on screen */
+.cal__day[aria-current='page'] {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.cal__day--today {
+  border-style: dashed;
+  background: var(--kunyit-soft);
+}
+
+.cal__today {
+  display: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cal__today-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.cal__day--ahead {
+  border-style: dashed;
+  border-color: var(--line-soft);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+@media (min-width: 720px) {
+  .cal__days {
+    grid-template-columns: repeat(14, minmax(0, 1fr));
+  }
+
+  .cal__day {
+    min-height: 64px;
+  }
+}
+
+/* Seven wide cells on a tablet, fourteen on a desktop: both have room for the words. */
+@media (min-width: 560px) and (max-width: 719px), (min-width: 960px) {
+  .cal__today {
+    display: block;
+  }
+
+  .cal__today-icon {
+    display: none;
+  }
+}
+
+@media (min-width: 960px) {
+  .cal__amount {
+    display: block;
+  }
+}
+
+/* --- Tabs ---------------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--paper-deep);
+  justify-self: center;
+  max-width: 100%;
+}
+
+.tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  padding: 0 var(--space-4);
+  border: var(--border) solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) ease-out,
+    transform var(--dur-press) ease-out;
+}
+
+.tabs__tab:hover {
+  background: var(--surface);
+}
+
+.tabs__tab[aria-selected='true'] {
+  border-color: var(--ink);
+  background: var(--kunyit);
+  box-shadow: var(--lip-sm) var(--ink);
+}
+
+.tabs__tab:active {
+  transform: translateY(2px);
+}
+
+.tabs__panel {
+  display: grid;
+  gap: var(--space-5);
+  animation: rise-in 320ms var(--ease-out) both;
+}
+
+.tabs__panel > * {
+  min-width: 0;
+}
+
+.tabs__panel:focus-visible {
+  outline-offset: 6px;
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 479px) {
+  .tabs {
+    width: 100%;
+    gap: 0;
+  }
+
+  .tabs__tab {
+    flex: 1 1 0;
+    padding: 0 var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .tabs__tab .icon {
+    display: none;
+  }
+}
+
+/* --- The guided tour ------------------------------------------------------------ */
+
+
+/* The dialog covers the window and is see-through; the dimming is the hole's shadow. */
+.tour {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.tour::backdrop {
+  background: transparent;
+}
+
+.tour__hole {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: var(--border-thick) solid var(--kunyit);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 200vmax rgb(42 27 18 / 0.62);
+  pointer-events: none;
+  transition:
+    transform 260ms var(--ease-out),
+    width 260ms var(--ease-out),
+    height 260ms var(--ease-out);
+}
+
+.tour__card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  gap: var(--space-3);
+  width: min(380px, calc(100vw - 20px));
+  padding: var(--space-4) var(--space-5);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--lip-lg) var(--ink);
+  transition: transform 260ms var(--ease-out);
+}
+
+.tour__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tour__head .avatar {
+  width: 48px;
+  height: 48px;
+}
+
+.tour__count {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.tour__title {
+  font-size: var(--text-xl);
+  line-height: 1.15;
+}
+
+.tour__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tour__next {
+  margin-left: auto;
+  font-size: var(--text-md);
+  padding: var(--space-2) var(--space-5);
+}
+
+.tour__skip {
+  justify-self: center;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* --- The rolling door between the parts of a day ------------------------------ */
+
+.shutter {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  overflow: hidden;
+}
+
+/* Corrugated steel, painted the green of the board, with a lip along the bottom. */
+.shutter__door {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-bottom: 14px solid var(--ink);
+  background-color: var(--papan-raised);
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.1) 0 3px,
+    transparent 3px 20px,
+    rgb(0 0 0 / 0.22) 20px 24px
+  );
+  transform: translateY(-100%);
+  will-change: transform;
+}
+
+/* What the door says: painted on, a little crooked. */
+.shutter__sign {
+  padding: var(--space-3) var(--space-7);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--krem);
+  color: var(--bata);
+  box-shadow: var(--lip-lg) var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+}
+
+.shutter__handle {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  width: 88px;
+  height: 14px;
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--kunyit);
+  transform: translateX(-50%);
+}
+
+/* --- The evening report, printed ---------------------------------------------- */
+
+/* Each line of the receipt comes out in turn (--line is its place in the order). */
+.nota--printing .nota__row,
+.nota--printing .nota__rule {
+  animation: print-line 240ms var(--ease-out) both;
+  animation-delay: calc(1300ms + var(--line, 0) * 110ms);
+}
+
+@keyframes print-line {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* A coin on its way to the till. It is placed by its transform alone. */
+.coin {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 800;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe08a 0 30%, var(--kunyit) 31%);
+  box-shadow: inset 0 0 0 3px rgb(184 116 0 / 0.55);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.coin--lost {
+  background: radial-gradient(circle at 35% 30%, #f2a79b 0 30%, var(--sambal) 31%);
+  box-shadow: inset 0 0 0 3px rgb(143 39 21 / 0.55);
+}
+
+/* --- Pak Erlangga in the corner of the scene ---------------------------------- */
+
+.stage__host {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.stage__host .avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  box-shadow: var(--lip-sm) var(--ink);
+  pointer-events: auto;
+}
+
+/* What he says: a small bubble that points back at him. */
+.stage__say {
+  position: relative;
+  max-width: 190px;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.stage__say::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -7px;
+  width: 10px;
+  height: 10px;
+  border-left: var(--border) solid var(--ink);
+  border-bottom: var(--border) solid var(--ink);
+  background: var(--surface);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+@media (max-width: 519px) {
+  .stage__host .avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stage__say {
+    max-width: 150px;
+    font-size: var(--text-xs);
+  }
+}

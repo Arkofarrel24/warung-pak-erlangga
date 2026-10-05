@@ -1,0 +1,1135 @@
+/*
+ * Reset, typography, and the components shared by every view: buttons,
+ * steppers, cards, the receipt, chips, and the dialog.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--header-h) + var(--space-4));
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  /*
+   * A word is broken only when it cannot fit on a line of its own. (With
+   * "anywhere" a narrow column may shrink below its longest word and split
+   * it: "Lapora" on one line and "n" on the next.)
+   */
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+/* No last line of a single short word. */
+p,
+li,
+dd {
+  text-wrap: pretty;
+}
+
+h1 {
+  font-size: var(--text-3xl);
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+h3,
+h4 {
+  font-size: var(--text-lg);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+svg {
+  display: block;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* --- Accessibility helpers ------------------------------------------------ */
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* A heading focused by the router: visible to assistive technology only. */
+[tabindex='-1']:focus {
+  outline: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-skip);
+  padding: var(--space-3) var(--space-4);
+  background: var(--kunyit);
+  color: var(--ink);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+/* --- Small pieces --------------------------------------------------------- */
+
+.icon {
+  width: 1.25em;
+  height: 1.25em;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.muted {
+  color: var(--ink-soft);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-3);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chip--owned {
+  background: var(--daun-soft);
+  color: var(--daun-text);
+  border-color: var(--daun-text);
+}
+
+.chip--param {
+  background: var(--biru-soft);
+  border-color: var(--biru);
+  color: #174a68;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  padding: var(--space-2) var(--space-5);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--lip-md) var(--ink);
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  /* Let go, a button springs back a little past where it was. */
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow var(--dur-press) ease-out,
+    background-color var(--dur-fast) ease-out;
+}
+
+.btn:hover {
+  background: var(--kunyit-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 var(--ink);
+}
+
+/* Pressing pushes the button down onto its lip. Transform does not move the layout. */
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
+  transition-duration: var(--dur-press);
+}
+
+.btn--primary {
+  background: var(--kunyit);
+  font-size: var(--text-lg);
+  padding: var(--space-3) var(--space-6);
+}
+
+.btn--primary:hover {
+  background: #ffbb38;
+}
+
+.btn--quiet {
+  box-shadow: none;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 700;
+  padding-inline: var(--space-3);
+}
+
+.btn--quiet:hover {
+  background: var(--paper-deep);
+}
+
+.btn--quiet:active,
+.btn--quiet:disabled,
+.btn--quiet[aria-disabled='true'] {
+  transform: none;
+  box-shadow: none;
+}
+
+.btn--danger {
+  background: var(--sambal);
+  color: #fff;
+}
+
+.btn--danger:hover {
+  background: #d93a24;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--lip-md) var(--ink);
+}
+
+/* A toggle that stays down while it is on. */
+.btn[aria-pressed='true'] {
+  background: var(--daun-soft);
+  border-color: var(--daun-text);
+  color: var(--daun-text);
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--daun-text);
+}
+
+/* --- Cards ---------------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  box-shadow: var(--lip-md) var(--lip-color);
+  padding: var(--space-5);
+}
+
+.card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.card__note {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+/* --- Stepper: minus, value, plus ------------------------------------------ */
+
+.stepper {
+  display: inline-grid;
+  grid-template-columns: var(--target) minmax(0, 1fr) var(--target);
+  align-items: stretch;
+  width: 100%;
+  max-width: 260px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: var(--lip-sm) var(--lip-color);
+  overflow: hidden;
+}
+
+.stepper__btn {
+  display: grid;
+  place-items: center;
+  min-height: var(--target);
+  border: 0;
+  background: var(--kunyit-soft);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease-out;
+}
+
+.stepper__btn:hover:not(:disabled) {
+  background: var(--kunyit);
+}
+
+.stepper__btn:active:not(:disabled) {
+  background: var(--kunyit-deep);
+  color: #fff;
+}
+
+.stepper__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.stepper__btn:focus-visible,
+.stepper__input:focus-visible {
+  outline-offset: -3px;
+}
+
+.stepper__field {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--space-1);
+  padding-inline: var(--space-2);
+  border-inline: var(--border) solid var(--ink);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stepper__unit {
+  flex: none;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.stepper__input {
+  flex: none;
+  max-width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper--small {
+  max-width: 168px;
+}
+
+.stepper--small .stepper__input {
+  font-size: var(--text-lg);
+}
+
+/* --- Range slider --------------------------------------------------------- */
+
+.slider {
+  width: 100%;
+  max-width: 260px;
+  height: var(--target);
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--paper-deep);
+}
+
+.slider::-moz-range-track {
+  height: 6px;
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--paper-deep);
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -10px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--kunyit);
+  box-shadow: var(--lip-sm) var(--ink);
+}
+
+.slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--kunyit);
+}
+
+/* --- Field messages ------------------------------------------------------- */
+
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border) solid var(--sambal-text);
+  border-radius: var(--radius-sm);
+  background: var(--sambal-soft);
+  color: var(--sambal-text);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.field-error .icon {
+  margin-top: 2px;
+}
+
+/* --- The receipt (nota) --------------------------------------------------- */
+
+.nota {
+  position: relative;
+  padding: var(--space-5) var(--space-5) var(--space-6);
+  background: #fffefa;
+  border: var(--border) solid var(--ink);
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  /*
+   * The torn bottom edge of a receipt: a row of teeth. Each tile of the
+   * mask is twice as wide as it is high and keeps a 90-degree wedge that
+   * opens upward from its bottom centre, which is a triangle pointing down.
+   */
+  --tooth: 14px;
+  -webkit-mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth) / 2) no-repeat,
+    conic-gradient(from -45deg at 50% 100%, #000 0 90deg, #0000 0) bottom left / var(--tooth)
+      calc(var(--tooth) / 2) repeat-x;
+  mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth) / 2) no-repeat,
+    conic-gradient(from -45deg at 50% 100%, #000 0 90deg, #0000 0) bottom left / var(--tooth)
+      calc(var(--tooth) / 2) repeat-x;
+  filter: drop-shadow(0 2px 0 var(--ink)) drop-shadow(0 4px 0 var(--lip-color));
+}
+
+.nota__title {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: var(--space-3);
+}
+
+.nota__rows {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.nota__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: 5px 0;
+}
+
+.nota__row dt {
+  min-width: 0;
+}
+
+.nota__row dd {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.nota__row small {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.nota__rule {
+  border: 0;
+  border-top: 2px dashed var(--ink);
+  margin: var(--space-2) 0;
+}
+
+.nota__row--total {
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+
+.nota__row--total dd {
+  font-size: var(--text-lg);
+}
+
+.is-profit {
+  color: var(--color-profit);
+}
+
+.is-loss {
+  color: var(--color-loss);
+}
+
+/* --- Pak Erlangga speaks -------------------------------------------------- */
+
+.bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.avatar {
+  flex: none;
+  width: 56px;
+  height: 56px;
+}
+
+.avatar {
+  cursor: pointer;
+}
+
+/*
+ * Pak Erlangga is never quite still. Every part of the portrait turns
+ * around a point given in the picture's own coordinates (96 x 96), which is
+ * what transform-box: view-box makes possible.
+ */
+.avatar * {
+  transform-box: view-box;
+}
+
+/* Always: he breathes, his head floats a little, and he blinks. */
+.avatar__body {
+  transform-origin: 48px 98px;
+  animation: pak-breathe 4.2s ease-in-out infinite;
+}
+
+.avatar__bob {
+  animation: pak-bob 3.4s ease-in-out infinite;
+}
+
+.avatar__eyes {
+  transform-origin: 48px 46.5px;
+  animation: pak-blink 5.6s infinite;
+}
+
+@keyframes pak-breathe {
+  50% {
+    transform: scaleY(1.035);
+  }
+}
+
+@keyframes pak-bob {
+  50% {
+    transform: translateY(-0.9px);
+  }
+}
+
+@keyframes pak-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+
+/* The parts at rest. */
+.avatar__head {
+  transform-origin: 48px 66px;
+}
+
+.avatar__peci {
+  transform-origin: 48px 36px;
+}
+
+.avatar__moustache {
+  transform-origin: 48px 57px;
+}
+
+.avatar__smile {
+  transform-origin: 48px 61.5px;
+  transition: transform 300ms var(--ease-out);
+}
+
+.avatar__brow {
+  transition: transform 300ms var(--ease-out);
+}
+
+.avatar__brow--left {
+  transform-origin: 40px 40.6px;
+}
+
+.avatar__brow--right {
+  transform-origin: 56px 40.6px;
+}
+
+.avatar__mouth {
+  transform-origin: 48px 62.5px;
+  opacity: 0;
+}
+
+.avatar__cheeks {
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+}
+
+/* The hand waits below the edge of the picture. */
+.avatar__hand {
+  transform-origin: 75px 98px;
+  transform: translateY(40px);
+}
+
+/* How he looks after a good day, and after a bad one. */
+.avatar[data-mood='happy'] .avatar__cheeks {
+  opacity: 0.32;
+}
+
+.avatar[data-mood='happy'] .avatar__smile {
+  transform: scale(1.3);
+}
+
+.avatar[data-mood='sad'] .avatar__smile {
+  transform: translateY(2px) scaleY(-1);
+}
+
+.avatar[data-mood='sad'] .avatar__brow--left {
+  transform: rotate(-16deg);
+}
+
+.avatar[data-mood='sad'] .avatar__brow--right {
+  transform: rotate(16deg);
+}
+
+.avatar[data-mood='sad'] .avatar__head {
+  transform: translateY(1.5px) rotate(2deg);
+}
+
+/* Small things he does on his own, one at a time. */
+.avatar[data-gesture='glance'] .avatar__pupils {
+  animation: pak-glance 1500ms ease-in-out;
+}
+
+.avatar[data-gesture='brows'] .avatar__brows {
+  animation: pak-brows 1100ms ease-in-out;
+}
+
+.avatar[data-gesture='tilt'] .avatar__head {
+  animation: pak-tilt 1700ms ease-in-out;
+}
+
+.avatar[data-gesture='nod'] .avatar__head {
+  animation: pak-nod 1100ms ease-in-out;
+}
+
+.avatar[data-gesture='wiggle'] .avatar__moustache {
+  animation: pak-wiggle 900ms ease-in-out;
+}
+
+.avatar[data-gesture='peci'] .avatar__peci {
+  animation: pak-peci 1300ms ease-in-out;
+}
+
+.avatar[data-gesture='grin'] .avatar__smile {
+  animation: pak-grin 1500ms ease-in-out;
+}
+
+.avatar[data-gesture='grin'] .avatar__cheeks {
+  opacity: 0.32;
+}
+
+/* Things he is asked to do. */
+.avatar[data-gesture='talk'] .avatar__mouth {
+  animation: pak-talk 1700ms linear;
+}
+
+.avatar[data-gesture='talk'] .avatar__moustache {
+  animation: pak-talk-moustache 1700ms linear;
+}
+
+.avatar[data-gesture='talk'] .avatar__head {
+  animation: pak-nod 1700ms ease-in-out;
+}
+
+.avatar[data-gesture='wave'] .avatar__hand {
+  animation: pak-wave 2200ms ease-in-out;
+}
+
+.avatar[data-gesture='wave'] .avatar__brows {
+  animation: pak-brows 2200ms ease-in-out;
+}
+
+.avatar[data-gesture='wave'] .avatar__head {
+  animation: pak-tilt 2200ms ease-in-out;
+}
+
+.avatar[data-gesture='cheer'] {
+  animation: pak-cheer 1000ms var(--ease-out);
+}
+
+.avatar[data-gesture='cheer'] .avatar__cheeks {
+  opacity: 0.4;
+}
+
+.avatar[data-gesture='cheer'] .avatar__brows {
+  animation: pak-brows 1000ms ease-in-out;
+}
+
+.avatar[data-gesture='cheer'] .avatar__smile {
+  animation: pak-grin 1000ms ease-in-out;
+}
+
+.avatar[data-gesture='shake'] .avatar__head {
+  animation: pak-shake 900ms ease-in-out;
+}
+
+.avatar[data-gesture='clap'] {
+  animation: pak-cheer 1200ms var(--ease-out);
+}
+
+.avatar[data-gesture='clap'] .avatar__hand {
+  animation: pak-clap 1200ms ease-in-out;
+}
+
+.avatar[data-gesture='clap'] .avatar__smile {
+  animation: pak-grin 1200ms ease-in-out;
+}
+
+.avatar[data-gesture='clap'] .avatar__cheeks {
+  opacity: 0.4;
+}
+
+.avatar[data-gesture='scratch'] .avatar__hand {
+  animation: pak-scratch 1600ms ease-in-out;
+}
+
+.avatar[data-gesture='scratch'] .avatar__head {
+  animation: pak-tilt 1600ms ease-in-out;
+}
+
+.avatar[data-gesture='scratch'] .avatar__brow--left {
+  transform: rotate(-16deg);
+}
+
+.avatar[data-gesture='scratch'] .avatar__brow--right {
+  transform: rotate(16deg);
+}
+
+.avatar[data-gesture='scratch'] .avatar__smile {
+  transform: translateY(2px) scaleY(-1);
+}
+
+@keyframes pak-clap {
+  0%,
+  100% {
+    transform: translateY(40px);
+  }
+
+  14%,
+  42%,
+  70% {
+    transform: translateY(0) rotate(-8deg);
+  }
+
+  28%,
+  56%,
+  84% {
+    transform: translateY(0) rotate(-26deg);
+  }
+}
+
+/* The hand goes up to the side of his head and rubs it. */
+@keyframes pak-scratch {
+  0%,
+  100% {
+    transform: translateY(40px);
+  }
+
+  18%,
+  46%,
+  74% {
+    transform: translate(-6px, -30px);
+  }
+
+  32%,
+  60%,
+  88% {
+    transform: translate(-3px, -34px) rotate(-5deg);
+  }
+}
+
+@keyframes pak-glance {
+  18%,
+  42% {
+    transform: translateX(-2.2px);
+  }
+
+  58%,
+  84% {
+    transform: translateX(2.2px);
+  }
+}
+
+@keyframes pak-brows {
+  25%,
+  70% {
+    transform: translateY(-2.6px);
+  }
+}
+
+@keyframes pak-tilt {
+  25%,
+  72% {
+    transform: rotate(-7deg);
+  }
+}
+
+@keyframes pak-nod {
+  18%,
+  58% {
+    transform: translateY(1.8px) rotate(2.5deg);
+  }
+
+  38%,
+  78% {
+    transform: none;
+  }
+}
+
+@keyframes pak-wiggle {
+  20% {
+    transform: rotate(-8deg);
+  }
+
+  40% {
+    transform: rotate(7deg);
+  }
+
+  60% {
+    transform: rotate(-5deg);
+  }
+
+  80% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes pak-peci {
+  30%,
+  62% {
+    transform: translateY(-3.5px) rotate(-6deg);
+  }
+}
+
+@keyframes pak-grin {
+  25%,
+  75% {
+    transform: scale(1.45);
+  }
+}
+
+@keyframes pak-talk {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scaleY(0.2);
+  }
+
+  8%,
+  28%,
+  48%,
+  68%,
+  88% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+
+  18%,
+  38%,
+  58%,
+  78% {
+    opacity: 1;
+    transform: scaleY(0.35);
+  }
+}
+
+@keyframes pak-talk-moustache {
+  8%,
+  28%,
+  48%,
+  68%,
+  88% {
+    transform: translateY(-1.2px);
+  }
+
+  18%,
+  38%,
+  58%,
+  78% {
+    transform: none;
+  }
+}
+
+@keyframes pak-wave {
+  0%,
+  100% {
+    transform: translateY(40px);
+  }
+
+  14%,
+  86% {
+    transform: translateY(0) rotate(0);
+  }
+
+  28%,
+  56% {
+    transform: translateY(0) rotate(-15deg);
+  }
+
+  42%,
+  70% {
+    transform: translateY(0) rotate(12deg);
+  }
+}
+
+@keyframes pak-cheer {
+  0%,
+  100% {
+    transform: none;
+  }
+
+  25% {
+    transform: translateY(-8px) rotate(-4deg);
+  }
+
+  50% {
+    transform: none;
+  }
+
+  70% {
+    transform: translateY(-4px) rotate(3deg);
+  }
+}
+
+@keyframes pak-shake {
+  15%,
+  55% {
+    transform: translateX(-2.6px) rotate(-3deg);
+  }
+
+  35%,
+  75% {
+    transform: translateX(2.6px) rotate(3deg);
+  }
+}
+
+.bubble__text {
+  position: relative;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-md);
+  border-top-left-radius: 4px;
+  max-width: 62ch;
+}
+
+/* When he says more than one thing, each has room. */
+.bubble__text > p + p {
+  margin-top: var(--space-2);
+}
+
+.bubble__name {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Something to do about what he has just said: a quiet button under his words. */
+.bubble__action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  margin: var(--space-1) 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--biru);
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease-out;
+}
+
+.bubble__action:hover {
+  background: var(--biru-soft);
+}
+
+/* --- Dialog --------------------------------------------------------------- */
+
+.dialog {
+  width: min(92vw, 440px);
+  padding: var(--space-5);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--lip-lg) var(--ink);
+}
+
+.dialog::backdrop {
+  background: rgb(31 51 39 / 0.72);
+}
+
+.dialog h2 {
+  margin-bottom: var(--space-2);
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+/* --- Reduced motion ------------------------------------------------------- */
+
+/* --- Confetti --------------------------------------------------------------- */
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* --- Entrances ------------------------------------------------------------- */
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0s !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
