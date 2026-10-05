@@ -10,7 +10,7 @@
 
 import { SAVE_VERSION, STATUS } from './game.js';
 
-const KEY = 'warung-pak-erlang:save';
+const KEY = 'warung-pak-erlangga:save';
 
 /** Runs `action` on the storage, and returns `fallback` if anything throws. */
 function attempt(storage, action, fallback) {

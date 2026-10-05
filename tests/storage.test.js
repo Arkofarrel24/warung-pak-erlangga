@@ -112,7 +112,7 @@ test('a damaged or foreign save is ignored', () => {
   ];
   for (const raw of unusable) {
     const storage = fakeStorage();
-    storage.items.set('warung-pak-erlang:save', raw);
+    storage.items.set('warung-pak-erlangga:save', raw);
     assert.equal(loadGame(storage), null, raw.slice(0, 40));
   }
 });

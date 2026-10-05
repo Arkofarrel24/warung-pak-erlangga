@@ -1,8 +1,8 @@
 {
-  "name": "warung-pak-erlang",
+  "name": "warung-pak-erlangga",
   "version": "0.1.0",
   "private": true,
-  "description": "Warung Pak Erlang: a food-stall management game whose queue runs on a real discrete-event simulation",
+  "description": "Warung Pak Erlangga: a food-stall management game whose queue runs on a real discrete-event simulation",
   "type": "module",
   "scripts": {
     "start": "python3 -m http.server 8000",
