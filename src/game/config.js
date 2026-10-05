@@ -1,0 +1,237 @@
+/**
+ * Every number the game runs on, in one place.
+ *
+ * The numbers come in two kinds, and it matters which is which:
+ *
+ * - MODEL numbers describe the warung itself: opening hours, how the day's
+ *   crowd rises and falls, how fast one person serves. They are chosen to
+ *   look like a small warung and are not tuned for difficulty.
+ *
+ * - BALANCE numbers (wage, rent, starting cash, prices of upgrades) are
+ *   derived from the model numbers by a stated rule, not picked by feel.
+ *   Each one below carries its rule. `npm run balance` recomputes all of
+ *   them from the model and prints the working, and tests/balance.test.js
+ *   fails if a number drifts away from its rule.
+ *
+ * Money is in rupiah, time in hours since opening, rates per hour.
+ */
+
+// ---------------------------------------------------------------------------
+// MODEL
+// ---------------------------------------------------------------------------
+
+export const DAY = Object.freeze({
+  openHour: 8, // the warung opens at 08:00
+  hours: 12, //   and closes at 20:00
+  periodLength: 1, // statistics are kept per hour
+  count: 14, // a game lasts two weeks
+});
+
+export const DEMAND = Object.freeze({
+  /**
+   * Arrival rate at each full hour (08:00, 09:00, ..., 20:00), in customers
+   * per hour, at the starting price and a reputation of 50. Between the
+   * hours the rate moves in a straight line. Quiet morning, lunch peak at
+   * noon, a lull, and a second peak around 18:00. About 205 customers a day.
+   */
+  baseProfile: Object.freeze([6, 8, 10, 18, 32, 30, 14, 8, 10, 20, 28, 20, 8]),
+
+  /** The price at which the base profile applies. */
+  referencePrice: 10_000,
+
+  /**
+   * Price sensitivity s of an exponential (log-linear) demand curve:
+   *
+   *   demand factor = e^(-(price - reference price) / s)
+   *
+   * Every Rp 1,000 added to the price turns away about 13% of customers.
+   * This curve has a simple optimum: with unlimited capacity, margin times
+   * demand, (p - v)·e^(-(p - p0)/s), is largest at p = v + s. When the
+   * warung is congested the best price is higher still, because customers
+   * lost to a higher price were going to be lost to the queue anyway.
+   */
+  priceSensitivity: 7_000,
+
+  /**
+   * Reputation (0 to 100) scales the whole profile in a straight line:
+   * factor = floor + slope·R/100. At R = 50 the factor is exactly 1.
+   */
+  reputationFloor: 0.4,
+  reputationSlope: 1.2,
+});
+
+export const SERVICE = Object.freeze({
+  /** μ: one untrained pegawai serves 12 customers an hour, 5 minutes each. */
+  baseRate: 12,
+  /** θ: a waiting customer gives up at rate 5 per hour, after 12 minutes on average. */
+  basePatienceRate: 5,
+});
+
+/** Four shifts of three hours, used once the shift board has been bought. */
+export const SHIFTS = Object.freeze([
+  Object.freeze({ id: 'pagi', from: 0, to: 3 }), //   08:00-11:00
+  Object.freeze({ id: 'siang', from: 3, to: 6 }), //  11:00-14:00
+  Object.freeze({ id: 'sore', from: 6, to: 9 }), //   14:00-17:00
+  Object.freeze({ id: 'petang', from: 9, to: 12 }), // 17:00-20:00
+]);
+
+export const LIMITS = Object.freeze({
+  staff: Object.freeze({ min: 1, max: 6 }),
+  price: Object.freeze({ min: 5_000, max: 25_000, step: 500 }),
+  stock: Object.freeze({ min: 0, max: 600 }),
+  seats: Object.freeze({ min: 0, max: 12 }),
+});
+
+/**
+ * Reputation: how each customer's visit turns into the day's score, and how
+ * fast the score moves the reputation.
+ *
+ * Day score = 100 x (points earned / customers who came), kept within 0-100:
+ *
+ *   + 1                    for each customer served
+ *   - 1 / waitTolerance    for each hour anyone spent waiting. With a
+ *                          tolerance of 20 minutes, twenty minutes of
+ *                          waiting cancel one satisfied customer. The total
+ *                          waiting time is the area under the queue-length
+ *                          curve, Lq x T: the link from Lq to reputation.
+ *   - renegePenalty        for each customer who gave up waiting (reneging)
+ *   - turnedAwayPenalty    for each customer who found the place full
+ *                          (balking) or sold out
+ *
+ * The reputation then moves part of the way toward the day's score:
+ *
+ *   R_next = R + memory x (score - R)
+ *
+ * which is exponential smoothing. With memory = 0.3, a day counts for 30%
+ * and everything before it for 70%, so one bad day hurts but does not ruin.
+ */
+export const REPUTATION = Object.freeze({
+  start: 50,
+  memory: 0.3,
+  waitTolerance: 20 / 60,
+  renegePenalty: 1,
+  turnedAwayPenalty: 0.5,
+});
+
+// ---------------------------------------------------------------------------
+// BALANCE
+//
+// The working behind each number is printed by `npm run balance`. The figures
+// quoted in the comments are expected values from the analytic solver for the
+// starting setup: 2 pegawai, Rp 10,000, 2 waiting seats, reputation 50.
+// ---------------------------------------------------------------------------
+
+export const COSTS = Object.freeze({
+  /** v: ingredients for one portion. A model number; the rest follow from it. */
+  ingredient: 6_000,
+
+  /**
+   * Wage per pegawai per hour.
+   *
+   * Rule: at the starting setup a third pegawai should just pay for itself
+   * on the day, so that hiring is a real decision and not an obvious one.
+   *
+   * Working: 2 pegawai serve 162.5 customers a day and 3 serve 188.3, a gain
+   * of 25.8. At a margin of Rp 4,000 each that is Rp 103,300 a day, or
+   * Rp 8,600 an hour over a 12-hour day. What the third pegawai does buy is
+   * reputation: the day score rises from 59 to 84.
+   */
+  wagePerHour: 8_500,
+
+  /**
+   * Rent per day.
+   *
+   * Rule: the starting setup should keep about 5% of its sales income as
+   * profit. Doing nothing gets you nowhere: it neither sinks the warung nor
+   * makes it prosper, so every decision shows up in the result.
+   *
+   * Working: with the stock a newsvendor would prepare (160 portions), sales
+   * less ingredients come to Rp 608,300 a day. Fixed costs may be 95% of
+   * that, Rp 577,900. Two pegawai cost Rp 204,000, leaving Rp 373,900.
+   * Break-even point: (375,000 + 204,000) / 4,000 = 145 customers a day,
+   * against 162 expected.
+   */
+  rent: 375_000,
+});
+
+export const START = Object.freeze({
+  /**
+   * Rule: enough to open on the first day and survive it even if not one
+   * customer came: the first morning's ingredients, a day of wages, and a
+   * day of rent.
+   * Working: 960,000 + 204,000 + 375,000 = 1,539,000.
+   *
+   * Ingredients are paid every morning out of cash. A player whose cash
+   * falls below the cost of a day's stock must prepare less, sells less, and
+   * falls further behind: that squeeze is how a warung goes under.
+   */
+  cash: 1_550_000,
+
+  /**
+   * A model number, low on purpose. The third and fourth seat are worth
+   * buying; from the fifth on a seat brings nothing, because a customer that
+   * far back in the line is more likely to give up than to be served.
+   */
+  seats: 2,
+  staff: 2,
+  price: 10_000,
+
+  /**
+   * Portions prepared on the first day.
+   *
+   * Rule: the newsvendor quantile. A portion too few loses its margin of
+   * Rp 4,000, a portion too many loses its cost of Rp 6,000, so the best
+   * stock is the 4,000 / (4,000 + 6,000) = 40% quantile of demand.
+   * Working: over 4,000 simulated days that quantile is 160 portions.
+   */
+  stock: 160,
+});
+
+/**
+ * One-time purchases. Each changes exactly one parameter of the queue, so
+ * that buying it teaches what that parameter does.
+ *
+ * Rule for every price below: half of what the purchase adds to the profit
+ * of the whole game when it is bought on day 1 by a warung run on its
+ * starting setup. So it pays for itself in about a week, and buying it in
+ * the last week loses money.
+ */
+export const UPGRADES = Object.freeze({
+  /** A faster cash register: μ x 1.2. Brings Rp 1,128,000; half is Rp 564,000. */
+  cashRegister: Object.freeze({ cost: 550_000, serviceFactor: 1.2 }),
+  /**
+   * Queue numbers: customers take a number and need not stand in line, so
+   * they wait longer before giving up. Mean patience x 1.5, that is θ / 1.5.
+   * Brings Rp 181,000; half is Rp 91,000.
+   */
+  queueNumbers: Object.freeze({ cost: 90_000, patienceFactor: 1.5 }),
+  /**
+   * A shift board: pegawai can be scheduled per shift instead of per day.
+   * Valued differently, since it changes nothing until the schedule does:
+   * the best schedule against the best fixed number of pegawai.
+   * Brings Rp 505,000; half is Rp 253,000.
+   */
+  shiftBoard: Object.freeze({ cost: 250_000 }),
+});
+
+/**
+ * Training raises μ for the whole team, and trained pegawai ask for more pay.
+ * It is team-wide on purpose: with servers of different speeds the system
+ * would no longer be M/M/c, and the formulas would not apply.
+ *
+ * Each level brings less than the one before (Rp 635,000, then Rp 531,000,
+ * then Rp 439,000), so by the same rule each costs less: diminishing returns.
+ */
+export const TRAINING = Object.freeze([
+  Object.freeze({ serviceFactor: 1, wageFactor: 1, cost: 0 }),
+  Object.freeze({ serviceFactor: 1.15, wageFactor: 1.08, cost: 325_000 }),
+  Object.freeze({ serviceFactor: 1.3, wageFactor: 1.16, cost: 275_000 }),
+  Object.freeze({ serviceFactor: 1.45, wageFactor: 1.24, cost: 225_000 }),
+]);
+
+/**
+ * One more waiting seat (K grows by one). Priced by the same rule on the
+ * first extra seat, which brings Rp 153,000; half is Rp 76,000. The second
+ * extra seat brings only Rp 35,000, and the ones after that nothing.
+ */
+export const SEAT_COST = 75_000;

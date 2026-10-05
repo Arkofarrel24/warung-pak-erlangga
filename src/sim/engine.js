@@ -13,6 +13,7 @@
  *   - customers who give up waiting          reneging, the "+M" of M/M/c/K+M
  *   - a number of servers that changes       staff schedule c(t)
  *   - a closing time                         a terminating simulation: one day
+ *   - a limited stock                        the warung can sell out
  *
  * Any time unit works as long as it is used consistently: if the rates are in
  * customers per hour, then every time is in hours.
@@ -33,6 +34,7 @@ export const EVENT = Object.freeze({
   DEPARTURE: 'DEPARTURE',
   RENEGE: 'RENEGE',
   STAFF_CHANGE: 'STAFF_CHANGE',
+  SOLD_OUT: 'SOLD_OUT',
   CLOSE: 'CLOSE',
   WARMUP_END: 'WARMUP_END',
   END: 'END',
@@ -44,11 +46,14 @@ export const EVENT = Object.freeze({
  * REJECTED is balking: the customer finds every server busy and every waiting
  * seat taken, and leaves at once without joining. Queueing texts also call it
  * blocking, because here the customer has no choice in the matter.
+ *
+ * SOLD_OUT is a different loss: there is room, but nothing left to sell.
  */
 export const ARRIVAL_OUTCOME = Object.freeze({
   SERVED: 'SERVED',
   QUEUED: 'QUEUED',
   REJECTED: 'REJECTED',
+  SOLD_OUT: 'SOLD_OUT',
 });
 
 const DEFAULTS = Object.freeze({
@@ -57,6 +62,7 @@ const DEFAULTS = Object.freeze({
   capacity: Infinity,
   priorityShare: 0.2,
   patienceRate: 0,
+  stock: Infinity,
   warmup: 0,
   seed: 1,
   replication: 0,
@@ -83,6 +89,9 @@ const MAX_SEED = 0xffffffff;
  *   with a staff schedule: the seats stay put while c changes.
  * @property {number} [patienceRate] θ, the rate at which a waiting customer gives
  *   up. Patience is exponential with mean 1/θ. 0 = customers never give up.
+ * @property {number} [stock]        portions on hand. Starting a service uses up
+ *   one. When the last one goes, everyone still waiting is sent away and later
+ *   arrivals are turned back at the door. Infinity = never runs out.
  * @property {number} [priorityShare] share of customers in the priority class
  *                                   (0 to 1), used only by the PRIORITY discipline
  * @property {number} [duration]     run length, warm-up included. Required
@@ -129,6 +138,7 @@ export class QueueSimulation {
       staffSchedule,
       discipline,
       patienceRate,
+      stock,
       duration,
       closingTime,
       warmup,
@@ -145,6 +155,10 @@ export class QueueSimulation {
     this.busyServers = 0;
     /** c(t): the number of servers on duty right now. */
     this.staff = staffSchedule ? staffSchedule[0].servers : servers;
+    /** Portions still on hand. */
+    this.stock = stock;
+    /** The time at which the last portion went, or null while there is stock. */
+    this.soldOutAt = null;
     this.line = new WaitingLine(discipline);
     this.fel = new EventQueue();
 
@@ -254,7 +268,8 @@ export class QueueSimulation {
     const stats = this.#stats;
     const { servers, staffSchedule, closingTime } = this.config;
     const observedTime = this.clock - this.#statsStart;
-    const accepted = stats.arrivals - stats.rejected;
+    // Customers who got in: not turned away by a full house or an empty kitchen.
+    const accepted = stats.arrivals - stats.rejected - stats.soldOutAtDoor;
     // Server time at their post. With a fixed number of servers that is c·T.
     const staffedTime = staffSchedule ? stats.areaStaffed : servers * observedTime;
 
@@ -293,7 +308,17 @@ export class QueueSimulation {
       WqReneged: stats.sumWaitReneged / stats.reneged,
       // Mean time in line over everyone who got in, served or not. This is the
       // waiting time that satisfies Little's law: Lq = λ_eff · WqAll.
-      WqAll: (stats.sumWait + stats.sumWaitReneged) / (stats.serviceStarts + stats.reneged),
+      WqAll:
+        (stats.sumWait + stats.sumWaitReneged + stats.sumWaitDismissed) /
+        (stats.serviceStarts + stats.reneged + stats.soldOutInLine),
+
+      // Customers lost because the stock ran out: those turned back at the
+      // door, and those who were already waiting when the last portion went.
+      soldOutAtDoor: stats.soldOutAtDoor,
+      soldOutInLine: stats.soldOutInLine,
+      soldOut: stats.soldOutAtDoor + stats.soldOutInLine,
+      soldOutAt: this.soldOutAt,
+      stockLeft: this.stock,
 
       // The raw areas under the curves, for example in customer-hours.
       totalQueueTime: stats.areaQueue,
@@ -319,6 +344,8 @@ export class QueueSimulation {
         return this.#handleRenege(event.data.customer);
       case EVENT.STAFF_CHANGE:
         return this.#handleStaffChange(event.data.servers);
+      case EVENT.SOLD_OUT:
+        return this.#handleSoldOut();
       case EVENT.CLOSE:
         // Arrivals stop on their own: none is ever scheduled at or after the
         // closing time. Customers already inside stay.
@@ -394,6 +421,7 @@ export class QueueSimulation {
       serviceStart: null,
       serviceEnd: null,
       renegedAt: null,
+      dismissedAt: null,
     };
     this.#count('arrivals');
 
@@ -404,6 +432,13 @@ export class QueueSimulation {
       outcome: ARRIVAL_OUTCOME.QUEUED,
       serverIndex: -1,
     };
+
+    // Nothing left to sell: the customer is turned back at the door.
+    if (this.stock === 0) {
+      this.#count('soldOutAtDoor');
+      record.outcome = ARRIVAL_OUTCOME.SOLD_OUT;
+      return record;
+    }
 
     // A server can take the customer only while fewer servers are busy than
     // are on duty.
@@ -446,7 +481,8 @@ export class QueueSimulation {
 
     // The server that just became free calls the next customer right away.
     // Who gets called is decided by the queue discipline.
-    const next = staysOnDuty && this.line.length > 0 ? this.line.next() : null;
+    const canServe = staysOnDuty && this.stock > 0;
+    const next = canServe && this.line.length > 0 ? this.line.next() : null;
     if (next) this.#startService(next, serverIndex);
 
     return {
@@ -488,13 +524,34 @@ export class QueueSimulation {
     this.staff = servers;
 
     const started = [];
-    while (this.busyServers < this.staff && this.line.length > 0) {
+    while (this.busyServers < this.staff && this.stock > 0 && this.line.length > 0) {
       const customer = this.line.next();
       const serverIndex = this.servers.indexOf(null);
       this.#startService(customer, serverIndex);
       started.push({ customer, serverIndex });
     }
     return { type: EVENT.STAFF_CHANGE, time: this.clock, servers, started };
+  }
+
+  /**
+   * The last portion has just been handed to a server. Everyone still in line
+   * is told there is nothing left and leaves; from now on arrivals are turned
+   * back at the door (see #handleArrival). Customers already being served
+   * are served to the end.
+   */
+  #handleSoldOut() {
+    const dismissed = [];
+    while (this.line.length > 0) {
+      const customer = this.line.next();
+      this.#cancelRenege(customer);
+      customer.dismissedAt = this.clock;
+      if (this.#isObserved(customer)) {
+        this.#count('soldOutInLine');
+        this.#add('sumWaitDismissed', this.clock - customer.arrivalTime);
+      }
+      dismissed.push(customer);
+    }
+    return { type: EVENT.SOLD_OUT, time: this.clock, dismissed };
   }
 
   /**
@@ -507,11 +564,22 @@ export class QueueSimulation {
     this.#renegeEvents.set(customer.id, event);
   }
 
+  #cancelRenege(customer) {
+    const pending = this.#renegeEvents.get(customer.id);
+    if (!pending) return;
+    this.fel.cancel(pending);
+    this.#renegeEvents.delete(customer.id);
+  }
+
   #startService(customer, serverIndex) {
-    const pendingRenege = this.#renegeEvents.get(customer.id);
-    if (pendingRenege) {
-      this.fel.cancel(pendingRenege);
-      this.#renegeEvents.delete(customer.id);
+    this.#cancelRenege(customer);
+
+    // Each service uses up one portion. The SOLD_OUT event is scheduled for
+    // this same instant, so it is the very next thing to happen.
+    this.stock -= 1;
+    if (this.stock === 0) {
+      this.soldOutAt = this.clock;
+      this.fel.schedule(this.clock, EVENT.SOLD_OUT);
     }
 
     customer.serviceStart = this.clock;
@@ -636,6 +704,7 @@ export class QueueSimulation {
         arrivals: period.arrivals,
         rejected: period.rejected,
         reneged: period.reneged,
+        soldOut: period.soldOutAtDoor + period.soldOutInLine,
         served: period.departures,
         rho: period.areaBusy / period.areaStaffed,
         L: period.areaSystem / length,
@@ -673,11 +742,14 @@ function emptyCounters() {
     arrivals: 0,
     rejected: 0,
     reneged: 0,
+    soldOutAtDoor: 0,
+    soldOutInLine: 0,
     departures: 0,
     sumSystemTime: 0,
     serviceStarts: 0,
     sumWait: 0,
     sumWaitReneged: 0,
+    sumWaitDismissed: 0,
   };
 }
 
@@ -758,6 +830,9 @@ function normalizeConfig(input) {
   }
   if (!(Number.isFinite(patienceRate) && patienceRate >= 0)) {
     throw new RangeError('Patience rate (θ) must be a number of at least 0.');
+  }
+  if (config.stock !== Infinity && (!Number.isInteger(config.stock) || config.stock < 0)) {
+    throw new RangeError('Stock must be a whole number of portions, 0 or more.');
   }
   if (config.periodLength !== undefined) requirePositive(config.periodLength, 'Period length');
   if (!(warmup >= 0 && warmup < config.duration)) {
