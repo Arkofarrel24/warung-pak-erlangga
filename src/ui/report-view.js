@@ -24,6 +24,7 @@ import { h, icon } from './dom.js';
 import { countUp, flyCoins, pop, prefersReducedMotion } from './motion.js';
 import { play } from './sound.js';
 import { EVENT_TEXT, SHOP_NAME } from './text.js';
+import { whyPanel, whyTeaser } from './why-view.js';
 import {
   clock,
   compact,
@@ -536,7 +537,18 @@ export function renderReport(container, { store }, day) {
         id: 'ringkasan',
         label: 'Ringkasan',
         icon: 'book',
-        panel: [eventNote(report), h('div', { class: 'report__pair' }, [ledgerNota(report), customersCard(report.results)])],
+        panel: [
+          eventNote(report),
+          whyTeaser(report, () => tabs.select('kenapa', { focus: true })),
+          h('div', { class: 'report__pair' }, [ledgerNota(report), customersCard(report.results)]),
+        ],
+      },
+      {
+        // The day explained in the terms of queueing theory.
+        id: 'kenapa',
+        label: 'Kenapa?',
+        icon: 'info',
+        panel: [whyPanel(report)],
       },
       {
         id: 'antrean',
@@ -546,7 +558,7 @@ export function renderReport(container, { store }, day) {
       },
       {
         id: 'perjalanan',
-        label: 'Perjalanan',
+        label: 'Tren',
         icon: 'up',
         panel: [reputationCard(report), trendsCard(game.history.slice(0, day), charts.perjalanan)],
       },

@@ -3272,3 +3272,119 @@ a.cal__day:active {
     font-size: var(--text-xs);
   }
 }
+
+/* --- "Kenapa begini?": the day explained ---------------------------------------- */
+
+.why {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.why__lead {
+  color: var(--ink-soft);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.why__list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.why__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
+  align-items: start;
+}
+
+.why__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--kunyit-soft);
+}
+
+.why__body {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.why__concept {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.why__concept .chip {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.why__advice {
+  padding: var(--space-2) var(--space-3);
+  border-left: 4px solid var(--daun);
+  border-radius: 4px;
+  background: var(--daun-soft);
+  font-size: var(--text-sm);
+}
+
+/* What the finding cost the day, as a price tag. */
+.why__cost {
+  grid-column: 2;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  justify-self: start;
+  padding: 2px var(--space-3);
+  border: var(--border) solid var(--sambal-text);
+  border-radius: var(--radius-pill);
+  background: var(--sambal-soft);
+  color: var(--sambal-text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.why__cost small {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+@media (min-width: 720px) {
+  .why__item {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .why__cost {
+    grid-column: auto;
+    justify-self: end;
+  }
+}
+
+/* Four tabs fit a phone only without their icons and with less padding. */
+@media (max-width: 559px) {
+  .tabs {
+    width: 100%;
+    gap: 0;
+  }
+
+  .tabs__tab {
+    flex: 1 1 0;
+    padding: 0 var(--space-1);
+    font-size: var(--text-sm);
+  }
+
+  .tabs__tab .icon {
+    display: none;
+  }
+}
