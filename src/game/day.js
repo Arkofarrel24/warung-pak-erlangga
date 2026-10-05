@@ -11,10 +11,13 @@
  *   waiting seats       ->  K - c  waiting room
  *   queue numbers       ->  θ      rate at which waiting customers give up
  *   stock               ->         portions that can be sold
+ *
+ * The day's event, if there is one, changes one of the same parameters.
  */
 
-import { COSTS, DAY, SEAT_COST, SERVICE, SHIFTS, TRAINING, UPGRADES } from './config.js';
+import { COSTS, DAY, RENT_RISE, SEAT_COST, SERVICE, SHIFTS, TRAINING, UPGRADES } from './config.js';
 import { arrivalProfile } from './demand.js';
+import { eventArrivalProfile, eventBatchArrivals, eventStaffSchedule, hoursOffPayroll, ingredientCost } from './events.js';
 
 /** μ: the base rate, raised by training and by the cash register. */
 export function serviceRate(state) {
@@ -31,6 +34,11 @@ export function patienceRate(state) {
 
 export function wagePerHour(state) {
   return COSTS.wagePerHour * TRAINING[state.trainingLevel].wageFactor;
+}
+
+/** The rent of a day: it goes up once, at the start of the second week. */
+export function rentOn(day) {
+  return COSTS.rent + (day >= RENT_RISE.fromDay ? RENT_RISE.amount : 0);
 }
 
 /** What the morning's purchases cost, before anything is bought. */
@@ -63,11 +71,14 @@ export function staffPerShift(state, decisions) {
 /**
  * The queueing model of the day, in the form both the simulation engine and
  * the analytic solver take. `state` is the warung after the morning's
- * purchases.
+ * purchases, and `event` is what the day brings unasked, if anything.
  */
-export function dayModel(state, decisions) {
+export function dayModel(state, decisions, event = null) {
   const model = {
-    arrivalProfile: arrivalProfile({ price: decisions.price, reputation: state.reputation }),
+    arrivalProfile: eventArrivalProfile(
+      arrivalProfile({ price: decisions.price, reputation: state.reputation }),
+      event,
+    ),
     serviceRate: serviceRate(state),
     waitingRoom: decisions.seats,
     patienceRate: patienceRate(state),
@@ -75,15 +86,14 @@ export function dayModel(state, decisions) {
     periodLength: DAY.periodLength,
   };
 
-  const staff = staffPerShift(state, decisions);
-  if (staff.every((servers) => servers === staff[0])) {
-    model.servers = staff[0];
-  } else {
-    // c(t): one entry per shift whose number differs from the shift before.
-    model.staffSchedule = SHIFTS.map((shift, i) => ({ time: shift.from, servers: staff[i] })).filter(
-      (entry, i) => i === 0 || entry.servers !== staff[i - 1],
-    );
-  }
+  // c(t): one entry per change in the number of pegawai. A number that
+  // stays the same all day is not a schedule at all.
+  const schedule = eventStaffSchedule(staffPerShift(state, decisions), event);
+  if (schedule.length === 1) model.servers = schedule[0].servers;
+  else model.staffSchedule = schedule;
+
+  const batches = eventBatchArrivals(event);
+  if (batches.length > 0) model.batchArrivals = batches;
   return model;
 }
 
@@ -94,25 +104,38 @@ export function dayModel(state, decisions) {
  *   ingredients  cost per portion x portions prepared; what is not sold is
  *                thrown away, so it is the stock that is paid for, not the sales
  *   wages        hourly wage x hours the pegawai were at their post, the
- *                few minutes of overtime after closing included
- *   rent         a fixed amount per day
+ *                few minutes of overtime after closing included; an event
+ *                may put someone at the counter unpaid, or keep a pegawai
+ *                on the payroll while away from it (see paidStaffTime)
+ *   rent         a fixed amount per day, higher from the second week on
  *
  * Purchases (seats, training, upgrades) are investments and are kept out of
  * the day's profit, but they do come out of the cash.
  */
-export function settle(stateBefore, state, decisions, results) {
+/**
+ * The pegawai-hours that are paid for, from the hours the counter was staffed.
+ * `state` is the warung after the morning's purchases.
+ */
+export function paidStaffTime(state, decisions, totalStaffedTime, event = null) {
+  return totalStaffedTime - hoursOffPayroll(staffPerShift(state, decisions), event);
+}
+
+export function settle(stateBefore, state, decisions, results, event = null) {
+  const perPortion = ingredientCost(event);
   const revenue = decisions.price * results.served;
-  const ingredients = COSTS.ingredient * decisions.stock;
-  const wages = Math.round(wagePerHour(state) * results.totalStaffedTime);
-  const rent = COSTS.rent;
+  const ingredients = perPortion * decisions.stock;
+  const paidHours = paidStaffTime(state, decisions, results.totalStaffedTime, event);
+  const wages = Math.round(wagePerHour(state) * paidHours);
+  const rent = rentOn(stateBefore.day);
   const purchases = purchaseCost(stateBefore, decisions.buy);
   const profit = revenue - ingredients - wages - rent;
   return {
     revenue,
     ingredients,
     // Portions thrown away at closing, at cost.
-    waste: COSTS.ingredient * results.stockLeft,
+    waste: perPortion * results.stockLeft,
     wages,
+    paidHours,
     rent,
     profit,
     purchases,

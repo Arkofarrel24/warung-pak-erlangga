@@ -11,6 +11,8 @@
 import { SAVE_VERSION, STATUS } from './game.js';
 
 const KEY = 'warung-pak-erlangga:save';
+const SESSION_KEY = 'warung-pak-erlangga:session';
+const PREFS_KEY = 'warung-pak-erlangga:prefs';
 
 /** Runs `action` on the storage, and returns `fallback` if anything throws. */
 function attempt(storage, action, fallback) {
@@ -50,15 +52,77 @@ export function loadGame(storage) {
   );
 }
 
-/** @returns {boolean} whether the save was removed */
+/** Removes the save and the session. @returns {boolean} whether they were removed */
 export function clearGame(storage) {
   return attempt(
     storage,
     (store) => {
       store.removeItem(KEY);
+      store.removeItem(SESSION_KEY);
       return true;
     },
     false,
+  );
+}
+
+/**
+ * The session: where the player was and the decisions they were still
+ * working on. It is a convenience, kept apart from the game itself, so that
+ * reloading the page does not throw away a half-filled morning.
+ *
+ * @returns {boolean} whether the session was saved
+ */
+export function saveSession(session, storage) {
+  return attempt(
+    storage,
+    (store) => {
+      store.setItem(SESSION_KEY, JSON.stringify(session));
+      return true;
+    },
+    false,
+  );
+}
+
+/** @returns {object} the saved session, or an empty one */
+export function loadSession(storage) {
+  return attempt(
+    storage,
+    (store) => {
+      const session = JSON.parse(store.getItem(SESSION_KEY));
+      return session !== null && typeof session === 'object' && !Array.isArray(session) ? session : {};
+    },
+    {},
+  );
+}
+
+/**
+ * Preferences: choices about the game as a whole rather than about one play
+ * of it (sound on or off, whether the first-day guide has been seen). They
+ * are kept apart from the save and the session, so starting a new game does
+ * not forget them.
+ *
+ * @returns {boolean} whether the preferences were saved
+ */
+export function savePrefs(prefs, storage) {
+  return attempt(
+    storage,
+    (store) => {
+      store.setItem(PREFS_KEY, JSON.stringify(prefs));
+      return true;
+    },
+    false,
+  );
+}
+
+/** @returns {object} the saved preferences, or none */
+export function loadPrefs(storage) {
+  return attempt(
+    storage,
+    (store) => {
+      const prefs = JSON.parse(store.getItem(PREFS_KEY));
+      return prefs !== null && typeof prefs === 'object' && !Array.isArray(prefs) ? prefs : {};
+    },
+    {},
   );
 }
 

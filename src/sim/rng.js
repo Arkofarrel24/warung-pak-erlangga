@@ -20,6 +20,8 @@ export const STREAM = Object.freeze({
   THINNING: 4,
   // Each customer's patience limit (reneging).
   PATIENCE: 5,
+  // Which unexpected event, if any, a game day brings.
+  EVENTS: 6,
 });
 
 // Initial rounds that are thrown away so the starting state gets mixed first

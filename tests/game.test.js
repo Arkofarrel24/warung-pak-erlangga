@@ -32,7 +32,7 @@ test('a new game starts on day 1 with the starting setup', () => {
     seed: 2026,
     day: 1,
     status: STATUS.PLAYING,
-    cash: 1_550_000,
+    cash: 1_500_000,
     reputation: 50,
     seatsOwned: 2,
     trainingLevel: 0,
@@ -141,13 +141,13 @@ test('shifts need a shift board, which may be bought the same morning', () => {
 
 test('the morning cannot cost more than the cash on hand', () => {
   const state = fresh();
-  // Rp 1,550,000 buys 258 portions at Rp 6,000, and not one more.
-  assert.deepEqual(codes(state, decide(state, { stock: 258 })), []);
-  assert.deepEqual(codes(state, decide(state, { stock: 259 })), [PROBLEM.CASH]);
-  // A cash register (Rp 550,000) leaves Rp 1,000,000: 166 portions.
+  // Rp 1,500,000 buys 250 portions at Rp 6,000, and not one more.
+  assert.deepEqual(codes(state, decide(state, { stock: 250 })), []);
+  assert.deepEqual(codes(state, decide(state, { stock: 251 })), [PROBLEM.CASH]);
+  // A cash register (Rp 550,000) leaves Rp 950,000: 158 portions.
   const withRegister = { buy: { upgrades: ['cashRegister'] } };
-  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 166 })), []);
-  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 167 })), [PROBLEM.CASH]);
+  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 158 })), []);
+  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 159 })), [PROBLEM.CASH]);
 });
 
 // ---------------------------------------------------------------------------
@@ -250,7 +250,7 @@ test('what is bought in the morning is in use that day and is kept', () => {
   assert.equal(next.seatsOwned, 3);
   assert.equal(next.trainingLevel, 1);
   assert.equal(next.upgrades.queueNumbers, true);
-  assert.equal(next.cash, 1_550_000 - 490_000 + report.ledger.profit);
+  assert.equal(next.cash, 1_500_000 - 490_000 + report.ledger.profit);
   // Nothing is bought twice: tomorrow's default decisions buy nothing.
   assert.deepEqual(defaultDecisions(next).buy, { seats: 0, training: false, upgrades: [] });
   assert.equal(defaultDecisions(next).seats, 3);

@@ -47,6 +47,7 @@ import { ArrivalProfile } from '../sim/arrival-profile.js';
  * @property {number} waitingRoom    number of waiting seats, K - c. Must be
  *   finite: the state space has to be finite to be solved.
  * @property {number} [patienceRate] θ; 0 = customers never give up
+ * @property {{ time: number, size: number }[]} [batchArrivals] groups arriving at once
  * @property {number} closingTime    arrivals stop here; the line is then cleared
  * @property {number} [periodLength] also report per period of this length
  */
@@ -191,6 +192,28 @@ export function solveDay(model, { safety = 0.5, drainTolerance = 1e-9, maxDrain 
     y.set(moved);
   }
 
+  /**
+   * A group of `size` arrives at once. From state (q, b) its members take the
+   * free servers first, then the free seats, and the rest are turned away:
+   * a jump to another state, not a rate.
+   */
+  function applyBatch(y, size, staff) {
+    const moved = new Float64Array(stateCount);
+    let turnedAway = 0;
+    for (let q = 0; q <= waitingRoom; q++) {
+      for (let b = 0; b <= maxServers; b++) {
+        const p = y[q * stride + b];
+        if (p === 0) continue;
+        const served = Math.max(0, Math.min(size, staff - b));
+        const seated = Math.min(size - served, waitingRoom - q);
+        turnedAway += p * (size - served - seated);
+        moved[(q + seated) * stride + b + served] += p;
+      }
+    }
+    y.set(moved);
+    y[BLOCKED] += turnedAway;
+  }
+
   function moments(y) {
     let queue = 0;
     let busy = 0;
@@ -216,6 +239,15 @@ export function solveDay(model, { safety = 0.5, drainTolerance = 1e-9, maxDrain 
   // --- Opening hours ---------------------------------------------------------
 
   const staffChanges = new Map(schedule.slice(1).map((entry) => [entry.time, entry.servers]));
+  // Groups by the time they arrive; two groups at the same time count as one larger group.
+  const batches = new Map();
+  for (const { time: at, size } of model.batchArrivals ?? []) {
+    if (at < closingTime) batches.set(at, (batches.get(at) ?? 0) + size);
+  }
+  const batchTotal = [...batches.values()].reduce((sum, size) => sum + size, 0);
+  /** Members of groups arriving in [from, to). */
+  const batchArrivalsIn = (from, to) =>
+    [...batches].reduce((sum, [at, size]) => sum + (at >= from && at < to ? size : 0), 0);
   const periodEnds = new Set();
   if (periodLength !== undefined) {
     for (let k = 1; k * periodLength <= closingTime; k++) periodEnds.add(k * periodLength);
@@ -225,6 +257,7 @@ export function solveDay(model, { safety = 0.5, drainTolerance = 1e-9, maxDrain 
     ...new Set([
       ...profile.breakpoints.filter((time) => time > 0 && time < closingTime),
       ...[...staffChanges.keys()].filter((time) => time <= closingTime),
+      ...[...batches.keys()].filter((time) => time > 0),
       ...periodEnds,
       closingTime,
     ]),
@@ -246,7 +279,8 @@ export function solveDay(model, { safety = 0.5, drainTolerance = 1e-9, maxDrain 
     const totalBusyTime = y[BUSY] - snapshot.busy;
     const totalStaffedTime = y[PRESENT] - snapshot.present;
     const scheduled = scheduledTime - snapshot.scheduled;
-    const arrivals = profile.expectedArrivals(periodStart, Math.min(to, closingTime));
+    const arrivals =
+      profile.expectedArrivals(periodStart, Math.min(to, closingTime)) + batchArrivalsIn(periodStart, to);
     periods.push({
       from: periodStart,
       to,
@@ -274,6 +308,9 @@ export function solveDay(model, { safety = 0.5, drainTolerance = 1e-9, maxDrain 
     };
   }
 
+  // A group at the very moment of opening walks into an empty warung.
+  if (batches.has(0)) applyBatch(y, batches.get(0), staff);
+
   for (const stop of stops) {
     integrate(y, time, stop, profile.rateAt(time), profile.rateBefore(stop), staff);
     scheduledTime += staff * (stop - time);
@@ -283,6 +320,7 @@ export function solveDay(model, { safety = 0.5, drainTolerance = 1e-9, maxDrain 
       staff = staffChanges.get(stop);
       applyStaffChange(y, staff);
     }
+    if (batches.has(stop) && stop < closingTime) applyBatch(y, batches.get(stop), staff);
   }
   const atClose = moments(y);
   const notEmptyAtClose = y[NOT_EMPTY];
@@ -307,7 +345,7 @@ export function solveDay(model, { safety = 0.5, drainTolerance = 1e-9, maxDrain 
   }
   if (periodLength !== undefined && time > periodStart) closePeriod(time);
 
-  const arrivals = profile.expectedArrivals(0, closingTime);
+  const arrivals = profile.expectedArrivals(0, closingTime) + batchTotal;
   return {
     arrivals,
     // Expected numbers of customers by how their visit ends.

@@ -8,24 +8,26 @@
  */
 
 import { solveDay } from '../analytic/transient.js';
-import { COSTS } from './config.js';
-import { applyPurchases, dayModel, wagePerHour } from './day.js';
+import { applyPurchases, dayModel, paidStaffTime, rentOn, wagePerHour } from './day.js';
+import { ingredientCost } from './events.js';
 import { dayScore } from './reputation.js';
 
 /**
+ * @param {object | null} [event] the day's event, as from eventForDay()
  * @returns expected values for the day, assuming the stock never runs out
  */
-export function expectedDay(state, decisions) {
+export function expectedDay(state, decisions, event = null) {
   const equipped = applyPurchases(state, decisions.buy);
-  const model = dayModel(equipped, decisions);
+  const model = dayModel(equipped, decisions, event);
   const theory = solveDay(model);
 
   // "Demand" in the stock decision: the portions the day would sell if the
   // kitchen never ran out. Sales are then min(demand, stock).
   const demand = theory.served;
-  const margin = decisions.price - COSTS.ingredient;
-  const wages = wagePerHour(equipped) * theory.totalStaffedTime;
-  const fixedCosts = wages + COSTS.rent;
+  const margin = decisions.price - ingredientCost(event);
+  const wages = wagePerHour(equipped) * paidStaffTime(equipped, decisions, theory.totalStaffedTime, event);
+  const rent = rentOn(state.day);
+  const fixedCosts = wages + rent;
 
   return {
     model,
@@ -40,7 +42,7 @@ export function expectedDay(state, decisions) {
     // Contribution: what the day's sales add after paying for their ingredients.
     contribution: margin * demand,
     wages,
-    rent: COSTS.rent,
+    rent,
     // Profit when exactly as many portions are prepared as are sold.
     profit: margin * demand - fixedCosts,
     // Break-even point: the customers needed to cover wages and rent.

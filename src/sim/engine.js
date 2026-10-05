@@ -14,6 +14,7 @@
  *   - a number of servers that changes       staff schedule c(t)
  *   - a closing time                         a terminating simulation: one day
  *   - a limited stock                        the warung can sell out
+ *   - groups arriving together               bulk arrivals at set times
  *
  * Any time unit works as long as it is used consistently: if the rates are in
  * customers per hour, then every time is in hours.
@@ -31,6 +32,7 @@ export { DISCIPLINE, PRIORITY_CLASS };
 
 export const EVENT = Object.freeze({
   ARRIVAL: 'ARRIVAL',
+  BATCH_ARRIVAL: 'BATCH_ARRIVAL',
   DEPARTURE: 'DEPARTURE',
   RENEGE: 'RENEGE',
   STAFF_CHANGE: 'STAFF_CHANGE',
@@ -89,6 +91,9 @@ const MAX_SEED = 0xffffffff;
  *   with a staff schedule: the seats stay put while c changes.
  * @property {number} [patienceRate] θ, the rate at which a waiting customer gives
  *   up. Patience is exponential with mean 1/θ. 0 = customers never give up.
+ * @property {{ time: number, size: number }[]} [batchArrivals]
+ *   groups that arrive all at once at a set time, on top of the regular
+ *   stream (a bulk arrival). Each member is a customer like any other.
  * @property {number} [stock]        portions on hand. Starting a service uses up
  *   one. When the last one goes, everyone still waiting is sent away and later
  *   arrivals are turned back at the door. Infinity = never runs out.
@@ -203,6 +208,12 @@ export class QueueSimulation {
     if (closingTime !== undefined) this.fel.schedule(closingTime, EVENT.CLOSE);
     for (const change of staffSchedule?.slice(1) ?? []) {
       this.fel.schedule(change.time, EVENT.STAFF_CHANGE, { servers: change.servers });
+    }
+    for (const batch of this.config.batchArrivals ?? []) {
+      // A group that turns up after the doors have closed does not get in.
+      if (batch.time < (closingTime ?? Infinity)) {
+        this.fel.schedule(batch.time, EVENT.BATCH_ARRIVAL, { size: batch.size });
+      }
     }
   }
 
@@ -338,6 +349,8 @@ export class QueueSimulation {
     switch (event.type) {
       case EVENT.ARRIVAL:
         return this.#handleArrival();
+      case EVENT.BATCH_ARRIVAL:
+        return this.#handleBatch(event.data.size);
       case EVENT.DEPARTURE:
         return this.#handleDeparture(event.data.serverIndex);
       case EVENT.RENEGE:
@@ -409,7 +422,23 @@ export class QueueSimulation {
 
   #handleArrival() {
     this.#scheduleNextArrival();
+    return { type: EVENT.ARRIVAL, time: this.clock, ...this.#admit() };
+  }
 
+  /**
+   * A bulk arrival: a whole group comes through the door at the same
+   * instant. Its members are admitted one after another, each exactly as a
+   * single arrival would be, so the first ones take the free servers and
+   * seats and the rest are turned away.
+   */
+  #handleBatch(size) {
+    const arrivals = [];
+    for (let i = 0; i < size; i++) arrivals.push(this.#admit());
+    return { type: EVENT.BATCH_ARRIVAL, time: this.clock, arrivals };
+  }
+
+  /** One customer at the door: served at once, seated to wait, or turned away. */
+  #admit() {
     const customer = {
       id: this.#nextCustomerId++,
       arrivalTime: this.clock,
@@ -425,13 +454,7 @@ export class QueueSimulation {
     };
     this.#count('arrivals');
 
-    const record = {
-      type: EVENT.ARRIVAL,
-      time: this.clock,
-      customer,
-      outcome: ARRIVAL_OUTCOME.QUEUED,
-      serverIndex: -1,
-    };
+    const record = { customer, outcome: ARRIVAL_OUTCOME.QUEUED, serverIndex: -1 };
 
     // Nothing left to sell: the customer is turned back at the door.
     if (this.stock === 0) {
@@ -833,6 +856,17 @@ function normalizeConfig(input) {
   }
   if (config.stock !== Infinity && (!Number.isInteger(config.stock) || config.stock < 0)) {
     throw new RangeError('Stock must be a whole number of portions, 0 or more.');
+  }
+  if (config.batchArrivals !== undefined) {
+    const valid =
+      Array.isArray(config.batchArrivals) &&
+      config.batchArrivals.every(
+        (batch) => Number.isFinite(batch.time) && batch.time >= 0 && Number.isInteger(batch.size) && batch.size >= 1,
+      );
+    if (!valid) {
+      throw new RangeError('Batch arrivals must be a list of { time, size } with a time of at least 0 and a whole size of at least 1.');
+    }
+    config.batchArrivals = Object.freeze(config.batchArrivals.map(({ time, size }) => Object.freeze({ time, size })));
   }
   if (config.periodLength !== undefined) requirePositive(config.periodLength, 'Period length');
   if (!(warmup >= 0 && warmup < config.duration)) {

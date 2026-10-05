@@ -7,7 +7,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { defaultDecisions, newGame, playDay } from '../src/game/game.js';
-import { clearGame, loadGame, saveGame } from '../src/game/storage.js';
+import {
+  clearGame,
+  loadGame,
+  loadPrefs,
+  loadSession,
+  saveGame,
+  savePrefs,
+  saveSession,
+} from '../src/game/storage.js';
 
 /** Behaves like localStorage: string keys, string values. */
 function fakeStorage() {
@@ -148,5 +156,61 @@ test('the browser storage is used when no storage is passed', () => {
   } finally {
     if (hadStorage) Object.defineProperty(globalThis, 'localStorage', hadStorage);
     else delete globalThis.localStorage;
+  }
+});
+
+test('the session is kept next to the game and comes back as it was', () => {
+  const storage = fakeStorage();
+  const session = { route: '#/laporan/2', draftDay: 3, draft: { staff: 3, price: 12_000 } };
+
+  assert.equal(saveSession(session, storage), true);
+  assert.deepEqual(loadSession(storage), session);
+  assert.equal(loadGame(storage), null, 'a session is not a game');
+});
+
+test('a missing, damaged, or unreadable session is an empty one', () => {
+  assert.deepEqual(loadSession(fakeStorage()), {});
+  assert.deepEqual(loadSession(brokenStorage()), {});
+  assert.equal(saveSession({ route: '#/pagi' }, brokenStorage()), false);
+
+  for (const raw of ['not json {', 'null', '42', '[]', '"text"']) {
+    const storage = fakeStorage();
+    storage.items.set('warung-pak-erlangga:session', raw);
+    assert.deepEqual(loadSession(storage), {}, raw);
+  }
+});
+
+test('clearing the game clears the session too', () => {
+  const storage = fakeStorage();
+  saveGame(newGame(1), storage);
+  saveSession({ route: '#/pagi' }, storage);
+
+  assert.equal(clearGame(storage), true);
+  assert.deepEqual(loadSession(storage), {});
+  assert.equal(storage.items.size, 0);
+});
+
+test('preferences come back as they were, and outlive a cleared game', () => {
+  const storage = fakeStorage();
+  saveGame(newGame(4), storage);
+  saveSession({ route: '#/pagi' }, storage);
+
+  assert.equal(savePrefs({ sound: false, tourSeen: true }, storage), true);
+  clearGame(storage);
+
+  assert.equal(loadGame(storage), null);
+  assert.deepEqual(loadSession(storage), {});
+  assert.deepEqual(loadPrefs(storage), { sound: false, tourSeen: true });
+});
+
+test('missing, damaged, or unreadable preferences are empty ones', () => {
+  assert.deepEqual(loadPrefs(fakeStorage()), {});
+  assert.deepEqual(loadPrefs(brokenStorage()), {});
+  assert.equal(savePrefs({ sound: true }, brokenStorage()), false);
+
+  for (const raw of ['{not json', 'null', '[1,2]', '"sound"']) {
+    const storage = fakeStorage();
+    storage.setItem('warung-pak-erlangga:prefs', raw);
+    assert.deepEqual(loadPrefs(storage), {}, raw);
   }
 });

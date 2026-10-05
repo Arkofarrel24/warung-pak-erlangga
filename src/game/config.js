@@ -154,18 +154,55 @@ export const COSTS = Object.freeze({
   rent: 375_000,
 });
 
+/**
+ * The rent goes up once, at the start of the second week.
+ *
+ * Rule: a warung that is still run as on its first day should start losing
+ * money in the second week, so that standing still stops being safe. The
+ * rise is one and a half times what the starting setup is expected to earn
+ * on an ordinary day, rounded to Rp 25,000.
+ *
+ * Working: the starting setup is expected to earn Rp 70,000 a day, and
+ * 1.5 x 70,000 = 105,000, which rounds to Rp 100,000. From day 8 the same
+ * setup loses about Rp 30,000 a day. Over 300 games a player who never
+ * changes anything then ends on Rp 0.85 million instead of Rp 1.61 million
+ * and goes under in 15% of them, while a careful owner still ends above
+ * Rp 6 million.
+ *
+ * The rise is announced on the first morning. A rise that is known is a
+ * reason to plan; one that is not would only be a trap.
+ */
+export const RENT_RISE = Object.freeze({ fromDay: 8, amount: 100_000 });
+
+/**
+ * Stars at the end of a game: the cash it takes for two and for three.
+ *
+ * Surviving the fourteen days earns one star whatever the cash. The other
+ * two reward a warung that did more than survive.
+ *
+ * Rule: two stars for doubling the starting cash, which standing still or
+ * only following the news never does; three stars sit just below the worst
+ * games of a careful owner (a third pegawai, a higher price, and stock to
+ * match), so sound decisions earn them whatever the luck of the events.
+ * Working: the best 5% of players who never change anything end near
+ * Rp 1.6 million, far below 2 x 1,500,000 = Rp 3,000,000. The worst 5% of
+ * careful owners end near Rp 5.4 million, above Rp 5,000,000.
+ */
+export const STARS = Object.freeze({ two: 3_000_000, three: 5_000_000 });
+
 export const START = Object.freeze({
   /**
    * Rule: enough to open on the first day and survive it even if not one
    * customer came: the first morning's ingredients, a day of wages, and a
    * day of rent.
-   * Working: 960,000 + 204,000 + 375,000 = 1,539,000.
+   * Working: 960,000 + 204,000 + 375,000 = 1,539,000, rounded to a figure
+   * that is easy to keep in mind.
    *
    * Ingredients are paid every morning out of cash. A player whose cash
    * falls below the cost of a day's stock must prepare less, sells less, and
    * falls further behind: that squeeze is how a warung goes under.
    */
-  cash: 1_550_000,
+  cash: 1_500_000,
 
   /**
    * A model number, low on purpose. The third and fourth seat are worth
@@ -235,3 +272,56 @@ export const TRAINING = Object.freeze([
  * extra seat brings only Rp 35,000, and the ones after that nothing.
  */
 export const SEAT_COST = 75_000;
+
+// ---------------------------------------------------------------------------
+// EVENTS
+// ---------------------------------------------------------------------------
+
+/**
+ * Days on which something unexpected happens.
+ *
+ * There are two kinds. "News" is known in the morning, before the player
+ * decides, so it can be planned for. A "surprise" happens once the warung
+ * is open, and tests how much slack the day's plan has.
+ *
+ * Each event changes one input of the queueing model and nothing else, so
+ * that its effect in the report can be traced to it:
+ *
+ *   costFactor    ingredient cost per portion, for the day
+ *   demandFactor  arrival rate λ(t): all day, from hour `from` on, or (for a
+ *                 surprise) from the moment it strikes
+ *   staffChange   pegawai added to or taken from the counter, c(t): all day,
+ *                 or for `duration` hours from the moment the event strikes
+ *   size          customers who arrive at once, a bulk arrival
+ *
+ * `wagesUnchanged` marks a change at the counter that the wage bill does not
+ * follow: a pegawai sent on an errand is still paid, a nephew who lends a
+ * hand is not. (A pegawai who is sick all day is not paid.)
+ *
+ * A warung never drops below one pegawai: the owner steps in.
+ *
+ * Rule: good and bad events should roughly cancel, so that events add
+ * variety without making the average day better or worse. Working: see
+ * section 9 of `npm run balance`.
+ */
+export const EVENTS = Object.freeze({
+  /** The first day is always calm. */
+  firstDay: 2,
+  /** The chance that a day from then on brings an event: about two days in five. */
+  chance: 0.4,
+  catalog: Object.freeze({
+    ingredientsUp: Object.freeze({ kind: 'news', costFactor: 1.2 }),
+    ingredientsDown: Object.freeze({ kind: 'news', costFactor: 0.8 }),
+    rain: Object.freeze({ kind: 'news', demandFactor: 0.75 }),
+    payday: Object.freeze({ kind: 'news', demandFactor: 1.25 }),
+    nightMarket: Object.freeze({ kind: 'news', demandFactor: 1.6, from: 9 }),
+    staffSick: Object.freeze({ kind: 'surprise', staffChange: -1 }),
+    tourGroup: Object.freeze({ kind: 'surprise', size: 14, earliest: 2, latest: 10 }),
+    // The gas runs out, and one pegawai goes to swap the canister.
+    gasOut: Object.freeze({ kind: 'surprise', staffChange: -1, duration: 1.5, earliest: 2, latest: 9, wagesUnchanged: true }),
+    // Someone posts a video of the warung, and people start coming.
+    viral: Object.freeze({ kind: 'surprise', demandFactor: 1.5, earliest: 3, latest: 8 }),
+    // Pak Erlangga's nephew drops by and serves for a few hours, unpaid.
+    helper: Object.freeze({ kind: 'surprise', staffChange: 1, duration: 3, earliest: 2, latest: 8, wagesUnchanged: true }),
+  }),
+});

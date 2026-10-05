@@ -14,6 +14,7 @@ import test from 'node:test';
 import {
   cashByRule,
   demandSample,
+  eventEffects,
   fresh,
   newsvendor,
   playGames,
@@ -21,10 +22,13 @@ import {
   PURCHASE_PRICE_SHARE,
   purchaseValues,
   rentByRule,
+  rentRiseByRule,
   startDecisions,
   wageByRule,
 } from '../scripts/derive.js';
-import { COSTS, SEAT_COST, START, TRAINING, UPGRADES } from '../src/game/config.js';
+import { COSTS, RENT_RISE, SEAT_COST, STARS, START, TRAINING, UPGRADES } from '../src/game/config.js';
+import { rentOn } from '../src/game/day.js';
+import { stars, STATUS } from '../src/game/game.js';
 
 /** The game uses round numbers, so a number may sit this far from its rule. */
 const ROUNDING = 0.05;
@@ -84,22 +88,79 @@ test('seats and training show diminishing returns', () => {
   assert.ok(first > second && second > last && last > 0);
 });
 
+test('events: good and bad roughly cancel, and none alone can sink a warung', () => {
+  const { effects, mean, ordinary } = eventEffects();
+
+  // Averaged over the events, a day is within a few percent of an ordinary one.
+  assert.ok(Math.abs(mean) < 0.05 * ordinary.contribution, `mean effect ${Math.round(mean)}`);
+  // Some help and some hurt.
+  assert.ok(effects.some((item) => item.effect > 50_000));
+  assert.ok(effects.some((item) => item.effect < -50_000));
+  // The worst single event costs well under a third of the starting cash.
+  for (const item of effects) {
+    assert.ok(Math.abs(item.effect) < START.cash / 4, `${item.id}: ${Math.round(item.effect)}`);
+  }
+});
+
 test('the game is neither a walkover nor hopeless', () => {
   const outcome = Object.fromEntries(
-    POLICIES.map(({ id, policy }) => [id, playGames(policy, 100)]),
+    POLICIES.map(({ id, policy }) => [id, playGames(policy, 150)]),
   );
   const profit = (id) => outcome[id].meanCash - START.cash;
 
-  // Doing nothing gets you nowhere: no bankruptcy, and no fortune either.
-  assert.ok(outcome.unchanged.bankruptShare <= 0.02, 'the starting setup does not sink the warung');
-  assert.ok(profit('unchanged') > 0 && profit('unchanged') < 1_000_000, `profit ${profit('unchanged')}`);
+  // Standing still is not safe. The starting setup earns a thin profit in
+  // the first week and makes a thin loss once the rent has risen, so a
+  // player who never changes anything ends below the starting cash, and
+  // goes under now and then, but not as a rule.
+  assert.ok(profit('unchanged') < 0, `profit ${profit('unchanged')}`);
+  assert.ok(profit('unchanged') > -START.cash * 0.7, `profit ${profit('unchanged')}`);
+  assert.ok(outcome.unchanged.bankruptShare >= 0.05, `went bankrupt: ${outcome.unchanged.bankruptShare}`);
+  assert.ok(outcome.unchanged.bankruptShare <= 0.3, `went bankrupt: ${outcome.unchanged.bankruptShare}`);
+
+  // Reading the news and adjusting only the stock is already safer and better.
+  assert.ok(outcome.newsreader.bankruptShare <= outcome.unchanged.bankruptShare);
+  assert.ok(profit('newsreader') > profit('unchanged'));
 
   // Plain mistakes are fatal within the fourteen days.
   assert.ok(outcome.understaffed.bankruptShare >= 0.9, 'one pegawai cannot carry the lunch peak');
   assert.ok(outcome.cheap.bankruptShare >= 0.9, 'a price near cost cannot pay the rent');
 
-  // Sound decisions are rewarded several times over.
+  // Sound decisions are rewarded several times over, and survive every run of bad luck.
   assert.equal(outcome.careful.bankruptShare, 0);
-  assert.ok(profit('careful') > 4 * profit('unchanged'), `careful ${profit('careful')}, unchanged ${profit('unchanged')}`);
+  assert.ok(outcome.careful.meanCash > 3 * START.cash, `careful ends with ${outcome.careful.meanCash}`);
   assert.ok(outcome.careful.meanReputation > outcome.unchanged.meanReputation + 15);
+});
+
+test('the rent rise of the second week follows its rule', () => {
+  const { profit, rise } = rentRiseByRule();
+
+  assert.equal(RENT_RISE.amount, rise);
+  assert.equal(RENT_RISE.fromDay, 8);
+  // What the starting setup earned before the rise, it loses about half of after.
+  assert.ok(profit > 0);
+  assert.ok(profit - RENT_RISE.amount < 0);
+  assert.ok(profit - RENT_RISE.amount > -profit);
+
+  assert.equal(rentOn(RENT_RISE.fromDay - 1), COSTS.rent);
+  assert.equal(rentOn(RENT_RISE.fromDay), COSTS.rent + RENT_RISE.amount);
+  assert.equal(rentOn(14), COSTS.rent + RENT_RISE.amount);
+});
+
+test('the stars separate standing still from sound decisions', () => {
+  const still = playGames(POLICIES.find((item) => item.id === 'unchanged').policy, 150);
+  const careful = playGames(POLICIES.find((item) => item.id === 'careful').policy, 150);
+
+  assert.equal(STARS.two, 2 * START.cash);
+  // Standing still never earns the second star, even in its luckiest games.
+  assert.ok(still.highCash < STARS.two, `the best of standing still: ${still.highCash}`);
+  // A careful owner earns the third even in the unluckiest.
+  assert.ok(careful.lowCash > STARS.three, `the worst of careful: ${careful.lowCash}`);
+
+  const won = { status: STATUS.WON };
+  assert.equal(stars({ ...won, cash: STARS.three }), 3);
+  assert.equal(stars({ ...won, cash: STARS.three - 1 }), 2);
+  assert.equal(stars({ ...won, cash: STARS.two - 1 }), 1);
+  assert.equal(stars({ ...won, cash: 0 }), 1);
+  assert.equal(stars({ status: STATUS.BANKRUPT, cash: -1 }), 0);
+  assert.equal(stars({ status: STATUS.PLAYING, cash: 9_000_000 }), 0);
 });

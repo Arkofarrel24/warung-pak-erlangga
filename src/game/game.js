@@ -9,7 +9,7 @@
  */
 
 import { QueueSimulation } from '../sim/engine.js';
-import { COSTS, DAY, LIMITS, REPUTATION, SHIFTS, START, TRAINING, UPGRADES } from './config.js';
+import { DAY, LIMITS, REPUTATION, SHIFTS, STARS, START, TRAINING, UPGRADES } from './config.js';
 import {
   applyPurchases,
   dayModel,
@@ -21,6 +21,7 @@ import {
   wagePerHour,
 } from './day.js';
 import { priceFactor, reputationFactor } from './demand.js';
+import { eventForDay, ingredientCost, morningNews } from './events.js';
 import { dayScore, nextReputation } from './reputation.js';
 
 export const SAVE_VERSION = 1;
@@ -153,7 +154,9 @@ export function checkDecisions(state, rawDecisions) {
   // hand. Wages and rent are paid in the evening, out of the day's takings.
   // An impossible stock is reported as such, not as a shortage of cash.
   if (stockIsValid) {
-    const morningCost = purchaseCost(state, buy) + COSTS.ingredient * decisions.stock;
+    // Today's price of ingredients is part of the morning's news.
+    const perPortion = ingredientCost(morningNews(eventForDay(state.seed, state.day)));
+    const morningCost = purchaseCost(state, buy) + perPortion * decisions.stock;
     if (morningCost > state.cash) report('cash', PROBLEM.CASH);
   }
 
@@ -186,7 +189,8 @@ export function startDay(state, rawDecisions) {
 
   const decisions = withDefaults(rawDecisions);
   const equipped = applyPurchases(state, decisions.buy);
-  const model = dayModel(equipped, decisions);
+  const event = eventForDay(state.seed, state.day);
+  const model = dayModel(equipped, decisions, event);
   const simulation = new QueueSimulation({
     ...model,
     stock: decisions.stock,
@@ -200,13 +204,15 @@ export function startDay(state, rawDecisions) {
 
     const { WqByClass, ...kept } = simulation.results;
     const results = jsonSafe(kept);
-    const ledger = settle(state, equipped, decisions, simulation.results);
+    const ledger = settle(state, equipped, decisions, simulation.results, event);
     const score = dayScore(simulation.results);
     const reputationAfter = nextReputation(state.reputation, score);
 
     const report = {
       day: state.day,
       decisions,
+      // What the day brought unasked, or null on an ordinary day.
+      event,
       // The queueing parameters the decisions turned into.
       setup: {
         serviceRate: serviceRate(equipped),
@@ -216,6 +222,7 @@ export function startDay(state, rawDecisions) {
         seats: decisions.seats,
         priceFactor: priceFactor(decisions.price),
         reputationFactor: reputationFactor(state.reputation),
+        ingredientCost: ingredientCost(event),
       },
       results,
       ledger,
@@ -243,7 +250,16 @@ export function startDay(state, rawDecisions) {
     };
   }
 
-  return { simulation, model, decisions, finish };
+  return { simulation, model, decisions, event, finish };
+}
+
+/**
+ * How a game is rated once it has ended: no star for a warung that went
+ * under, one for surviving, and up to three for the cash it ends with.
+ */
+export function stars(state) {
+  if (state.status !== STATUS.WON) return 0;
+  return 1 + (state.cash >= STARS.two ? 1 : 0) + (state.cash >= STARS.three ? 1 : 0);
 }
 
 /** Plays a whole day at once, without animation. */

@@ -255,7 +255,7 @@ test('the accounts match the hand calculation', () => {
   //   wages         24.5 x 8,500           -208,250
   //   rent                                 -375,000
   //   profit                                196,750
-  //   cash          1,550,000 - 75,000 (seat) + 196,750 = 1,671,750
+  //   cash          1,500,000 - 75,000 (seat) + 196,750 = 1,621,750
   const before = fresh();
   const decisions = { ...defaultDecisions(before), price: 12_000, stock: 150, seats: 3, buy: { seats: 1 } };
   const equipped = applyPurchases(before, decisions.buy);
@@ -270,11 +270,12 @@ test('the accounts match the hand calculation', () => {
     ingredients: 900_000,
     waste: 60_000,
     wages: 208_250,
+    paidHours: 24.5,
     rent: 375_000,
     profit: 196_750,
     purchases: 75_000,
-    cashBefore: 1_550_000,
-    cashAfter: 1_671_750,
+    cashBefore: 1_500_000,
+    cashAfter: 1_621_750,
   });
 });
 

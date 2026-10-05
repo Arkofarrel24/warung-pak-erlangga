@@ -9,11 +9,24 @@
  * no randomness; distributions and whole games are simulated.
  */
 
-import { COSTS, DAY, DEMAND, SEAT_COST, SHIFTS, START, TRAINING, UPGRADES } from '../src/game/config.js';
+import {
+  COSTS,
+  DAY,
+  DEMAND,
+  EVENTS,
+  RENT_RISE,
+  SEAT_COST,
+  SHIFTS,
+  STARS,
+  START,
+  TRAINING,
+  UPGRADES,
+} from '../src/game/config.js';
 import { expectedDay } from '../src/game/forecast.js';
 import {
   cashByRule,
   demandSample,
+  eventEffects,
   expectedCourse,
   fresh,
   newsvendor,
@@ -26,6 +39,8 @@ import {
   startingDay,
   STARTING_PROFIT_SHARE,
   wageByRule,
+  rentRiseByRule,
+  RENT_RISE_FACTOR,
 } from './derive.js';
 
 const rupiah = (amount) => `Rp ${Math.round(amount).toLocaleString('id-ID')}`;
@@ -177,7 +192,8 @@ for (const { name, policy } of POLICIES) {
 }
 
 console.log('\n  The same policies played for real, 300 games each. Stock now runs out or is thrown away,');
-console.log(`  and a game ends early when cash drops below zero. Everyone starts with ${rupiah(START.cash)}.\n`);
+console.log('  events happen (section 9), and a game ends early when cash drops below zero.');
+console.log(`  Everyone starts with ${rupiah(START.cash)}.\n`);
 console.log('  policy                     mean final cash       worst 5%        best 5%    went bankrupt   reputation');
 for (const { name, policy } of POLICIES) {
   const outcome = playGames(policy);
@@ -186,3 +202,42 @@ for (const { name, policy } of POLICIES) {
       `      ${(outcome.bankruptShare * 100).toFixed(0).padStart(5)} %      ${outcome.meanReputation.toFixed(0).padStart(5)}`,
   );
 }
+
+// ---------------------------------------------------------------------------
+heading('9. EVENTS: good and bad should roughly cancel');
+// ---------------------------------------------------------------------------
+
+const events = eventEffects();
+console.log(`  The starting setup on an ordinary day: expected profit ${rupiah(events.ordinary.profit)}, score ${events.ordinary.score.toFixed(0)}.`);
+console.log(`  From day ${EVENTS.firstDay} on, a day brings one of these with probability ${EVENTS.chance}:\n`);
+console.log('  event              kind        expected profit      effect     score');
+for (const item of events.effects) {
+  console.log(
+    `  ${item.id.padEnd(18)} ${item.kind.padEnd(9)} ${rupiah(item.profit).padStart(16)} ${((item.effect >= 0 ? '+' : '') + rupiah(item.effect)).padStart(13)}   ${item.score.toFixed(0).padStart(5)}`,
+  );
+}
+console.log(`\n  Mean effect of an event: ${rupiah(events.mean)}. Per day, events and ordinary days together: ${rupiah(events.perDay)},`);
+console.log(`  against a sales income of ${rupiah(events.ordinary.contribution)} a day.`);
+
+// ---------------------------------------------------------------------------
+heading('10. THE SECOND WEEK: standing still stops being safe');
+// ---------------------------------------------------------------------------
+
+const rise = rentRiseByRule();
+console.log(`  The starting setup is expected to earn ${rupiah(rise.profit)} on an ordinary day.`);
+console.log(`  Rule: from day ${RENT_RISE.fromDay} the rent rises by ${RENT_RISE_FACTOR} times that, rounded: ${rupiah(rise.rise)}.`);
+console.log(`  -> rent rise in the game: ${rupiah(RENT_RISE.amount)}, from ${rupiah(COSTS.rent)} to ${rupiah(COSTS.rent + RENT_RISE.amount)} a day.`);
+console.log(`  The same setup then earns ${rupiah(rise.profit - RENT_RISE.amount)} a day: what was a thin profit is a thin loss.`);
+console.log('  (The whole-game table in section 8 already includes the rise.)');
+
+// ---------------------------------------------------------------------------
+heading('11. STARS: what the end of a game is worth');
+// ---------------------------------------------------------------------------
+
+const still = playGames(POLICIES.find((item) => item.id === 'unchanged').policy);
+const careful = playGames(POLICIES.find((item) => item.id === 'careful').policy);
+console.log('  One star for surviving the fourteen days.');
+console.log(`  Two stars from ${rupiah(STARS.two)} (${STARS.two / START.cash} x the starting cash):`);
+console.log(`    the best 5% of players who never change anything end on ${rupiah(still.highCash)}.`);
+console.log(`  Three stars from ${rupiah(STARS.three)}:`);
+console.log(`    the worst 5% of careful owners end on ${rupiah(careful.lowCash)}, the average on ${rupiah(careful.meanCash)}.`);

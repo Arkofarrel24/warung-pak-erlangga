@@ -15,7 +15,8 @@
  *   purchases      half of what each brings over 14 days when bought on day 1
  */
 
-import { COSTS, DAY, START } from '../src/game/config.js';
+import { COSTS, DAY, EVENTS, START } from '../src/game/config.js';
+import { eventForDay, ingredientCost, morningNews } from '../src/game/events.js';
 import { expectedDay } from '../src/game/forecast.js';
 import { defaultDecisions, newGame, playDay, STATUS } from '../src/game/game.js';
 import { nextReputation } from '../src/game/reputation.js';
@@ -87,6 +88,19 @@ export function newsvendor(demands, price) {
  * RENT. The starting setup, with the stock a newsvendor would prepare,
  * should keep STARTING_PROFIT_SHARE of its sales income as profit.
  */
+/** The second week's rent rise, as a multiple of what the starting setup earns in a day. */
+export const RENT_RISE_FACTOR = 1.5;
+const RENT_STEP = 25_000;
+
+/**
+ * The rent rise of the second week, by the rule in config.js: enough to turn
+ * the expected profit of the starting setup into a loss of half its size.
+ */
+export function rentRiseByRule() {
+  const { profit } = expectedDay(fresh(), startDecisions());
+  return { profit, rise: Math.round((RENT_RISE_FACTOR * profit) / RENT_STEP) * RENT_STEP };
+}
+
 export function rentByRule(demands = demandSample(fresh(), startDecisions())) {
   const { income } = newsvendor(demands, START.price);
   const wages = COSTS.wagePerHour * START.staff * DAY.hours;
@@ -188,6 +202,36 @@ export function purchaseValues() {
 }
 
 /**
+ * EVENTS. What each event does to the expected profit of the starting setup,
+ * against the same day without it. Events that strike at a moment are placed
+ * in the middle of the hours in which they can happen.
+ *
+ * Stock is assumed to match sales, as everywhere in the expected values. For
+ * the two changes in demand that is generous: a player who does not adjust
+ * the stock gains less from a busy day and loses more on a quiet one.
+ */
+export function eventEffects() {
+  const state = fresh();
+  const decisions = startDecisions();
+  const ordinary = expectedDay(state, decisions);
+  const effects = Object.entries(EVENTS.catalog).map(([id, spec]) => {
+    const event = { id, kind: spec.kind };
+    if (spec.earliest !== undefined) event.time = (spec.earliest + spec.latest) / 2;
+    const day = expectedDay(state, decisions, event);
+    return { id, kind: spec.kind, profit: day.profit, effect: day.profit - ordinary.profit, score: day.score };
+  });
+  const mean = effects.reduce((total, item) => total + item.effect, 0) / effects.length;
+  return {
+    ordinary,
+    effects,
+    /** Mean effect of an event, given that one happens. */
+    mean,
+    /** Mean effect per day, events and ordinary days together. */
+    perDay: mean * EVENTS.chance,
+  };
+}
+
+/**
  * Plays whole games with a policy and summarizes how they end.
  *
  * @param {(state: object) => object} policy decisions to override each day
@@ -200,8 +244,9 @@ export function playGames(policy, games = 300) {
     let state = newGame(1000 + game);
     while (state.status === STATUS.PLAYING) {
       const decisions = { ...defaultDecisions(state), ...policy(state) };
-      // Nobody can prepare more than they can pay for.
-      decisions.stock = Math.min(decisions.stock, Math.floor(state.cash / COSTS.ingredient));
+      // Nobody can prepare more than they can pay for, at today's price of ingredients.
+      const perPortion = ingredientCost(morningNews(eventForDay(state.seed, state.day)));
+      decisions.stock = Math.min(decisions.stock, Math.floor(state.cash / perPortion));
       state = playDay(state, decisions).state;
     }
     if (state.status === STATUS.BANKRUPT) bankrupt++;
@@ -222,6 +267,17 @@ export function playGames(policy, games = 300) {
 /** Four ways to run the warung, used to check that the game is neither a walkover nor hopeless. */
 export const POLICIES = Object.freeze([
   { id: 'unchanged', name: 'never changes anything', policy: () => ({}) },
+  {
+    // The starting setup, except that the stock follows the morning's news:
+    // less on a rainy day, more on payday. Surprises cannot be planned for.
+    id: 'newsreader',
+    name: 'only heeds the news',
+    policy: (state) => {
+      const news = morningNews(eventForDay(state.seed, state.day));
+      const expected = expectedDay(state, defaultDecisions(state), news);
+      return { stock: Math.round(expected.demand * 0.97) };
+    },
+  },
   { id: 'understaffed', name: 'one pegawai only', policy: () => ({ staff: 1, stock: 110 }) },
   { id: 'cheap', name: 'sells far too cheap', policy: () => ({ price: 8_000, stock: 195 }) },
   {
