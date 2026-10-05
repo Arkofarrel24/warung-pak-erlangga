@@ -1,6 +1,6 @@
 /**
- * Steady-state analytic formulas for Markovian queues: M/M/1, M/M/c, and
- * M/M/c/K.
+ * Steady-state analytic formulas for Markovian queues: M/M/1, M/M/c, M/M/c/K,
+ * and M/M/c/K+M (customers who give up waiting).
  *
  * Notation used throughout this file:
  *   λ   arrival rate
@@ -10,6 +10,7 @@
  *   a   = λ/μ, the offered load, measured in Erlangs
  *   ρ   = λ/(cμ), the traffic intensity. As long as ρ < 1 it equals the
  *       server utilization.
+ *   θ   rate at which a waiting customer gives up; mean patience is 1/θ
  *   p_n probability that exactly n customers are in the system
  *
  * Every formula assumes the system has been running for a very long time.
@@ -235,6 +236,112 @@ function erlangMixtureTail(seenByAccepted, servers, x) {
 }
 
 /**
+ * State probabilities of a birth-death process whose death rate depends on
+ * the state in any way:
+ *
+ *   p_n = p_(n-1) · λ / δ_n
+ *
+ * where δ_n is the total rate at which customers leave when n are present.
+ * This is the same balance equation as in stateProbabilities() above, with
+ * min(n, c)·μ replaced by a general δ_n.
+ *
+ * With an unlimited capacity the list is cut off where the remaining states
+ * carry no weight worth counting. That only works when δ_n keeps growing with
+ * n, which reneging guarantees.
+ *
+ * @param {(n: number) => number} deathRateAt δ_n
+ */
+function birthDeathProbabilities(arrivalRate, deathRateAt, capacity) {
+  const NEGLIGIBLE = -40; // e^-40 is about 4·10^-18 of the largest weight
+  const logWeights = [0];
+  let largest = 0;
+  for (let n = 1; n <= capacity; n++) {
+    const logWeight = logWeights[n - 1] + Math.log(arrivalRate / deathRateAt(n));
+    const fading = logWeight < logWeights[n - 1];
+    if (capacity === Infinity && fading && logWeight < largest + NEGLIGIBLE) break;
+    logWeights.push(logWeight);
+    if (logWeight > largest) largest = logWeight;
+  }
+  const weights = logWeights.map((logWeight) => Math.exp(logWeight - largest));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  return weights.map((weight) => weight / total);
+}
+
+/**
+ * M/M/c/K+M: c servers, at most K customers in the system, and customers who
+ * give up waiting (reneging). Without the limit K it is the Erlang-A model
+ * (Palm, 1943); the "A" stands for abandonment.
+ *
+ * Each waiting customer has an exponentially distributed patience with mean
+ * 1/θ. While n > c customers are present, n - c of them are waiting and each
+ * leaves at rate θ, on top of the c services in progress. So the system is
+ * still a birth-death process, with death rate
+ *
+ *   δ_n = min(n, c)·μ + max(n - c, 0)·θ
+ *
+ * and its state probabilities follow from p_n = p_(n-1) · λ / δ_n.
+ *
+ *   P_K        = p_K                   probability of balking (turned away)
+ *   λ_eff      = λ·(1 - P_K)           rate of customers who get in
+ *   Lq         = Σ (n - c)·p_n         for n > c
+ *   reneging   = θ·Lq                  customers lost per unit of time: on
+ *                                      average Lq are waiting, each leaving
+ *                                      at rate θ
+ *   throughput = μ·E[busy servers]     customers served per unit of time
+ *
+ * Everyone who arrives is turned away, gives up, or is served, so
+ * λ = λ·P_K + θ·Lq + throughput (flow conservation).
+ *
+ * This system is always stable, even when λ >= cμ and K is unlimited: the
+ * longer the line, the faster it loses customers.
+ *
+ * W and Wq here average over every customer who got in, including those who
+ * gave up (for them the time in the system is only their time in line). That
+ * is the average Little's law speaks about: L = λ_eff·W and Lq = λ_eff·Wq.
+ */
+export function mmckm(arrivalRate, serviceRate, servers, capacity, patienceRate) {
+  const deathRateAt = (n) =>
+    Math.min(n, servers) * serviceRate + Math.max(n - servers, 0) * patienceRate;
+  const p = birthDeathProbabilities(arrivalRate, deathRateAt, capacity);
+
+  let L = 0;
+  let Lq = 0;
+  let busy = 0;
+  let allBusy = 0;
+  p.forEach((pn, n) => {
+    L += n * pn;
+    Lq += Math.max(n - servers, 0) * pn;
+    busy += Math.min(n, servers) * pn;
+    if (n >= servers) allBusy += pn;
+  });
+  const blockingProbability = capacity === Infinity ? 0 : p[capacity];
+  const effectiveArrivalRate = arrivalRate * (1 - blockingProbability);
+  const abandonmentRate = patienceRate * Lq;
+
+  return {
+    model: capacity === Infinity ? 'M/M/c+M' : 'M/M/c/K+M',
+    stable: true,
+    trafficIntensity: arrivalRate / (servers * serviceRate),
+    // Utilization: the mean share of servers that are busy.
+    rho: busy / servers,
+    P0: p[0],
+    L,
+    Lq,
+    W: L / effectiveArrivalRate,
+    Wq: Lq / effectiveArrivalRate,
+    // An accepted customer waits when all servers are busy but the system is
+    // not full (PASTA, restricted to the customers who get in).
+    waitProbability: (allBusy - blockingProbability) / (1 - blockingProbability),
+    blockingProbability,
+    effectiveArrivalRate,
+    abandonmentRate,
+    // Share of ALL arriving customers who end up giving up.
+    renegeProbability: abandonmentRate / arrivalRate,
+    throughput: serviceRate * busy,
+  };
+}
+
+/**
  * Cobham's non-preemptive priority formula (1954) for two classes with equal
  * service rates, on M/M/c:
  *
@@ -277,7 +384,15 @@ export function priorityWaits(arrivalRate, serviceRate, servers, priorityShare) 
  * @param {import('../sim/engine.js').SimulationConfig} config
  */
 export function analyze(config) {
-  const { arrivalRate, serviceRate, servers = 1, capacity = Infinity } = config;
+  const { arrivalRate, serviceRate, servers = 1, patienceRate = 0 } = config;
+  // The capacity may be given as K or as the number of waiting seats, K - c.
+  const capacity =
+    config.waitingRoom === undefined ? (config.capacity ?? Infinity) : servers + config.waitingRoom;
+
+  // With reneging there is no waitTail and no per-class formula.
+  if (patienceRate > 0) {
+    return { ...mmckm(arrivalRate, serviceRate, servers, capacity, patienceRate), WqByClass: null };
+  }
 
   let result;
   if (capacity !== Infinity) result = mmck(arrivalRate, serviceRate, servers, capacity);

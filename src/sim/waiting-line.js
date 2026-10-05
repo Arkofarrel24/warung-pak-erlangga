@@ -51,6 +51,18 @@ class FifoQueue {
   peek(limit) {
     return this.#items.slice(this.#head, this.#head + limit);
   }
+
+  /**
+   * Takes one item out of the middle; everyone behind it moves up one place.
+   * This is a linear search, which is fine for a line limited by the number
+   * of waiting seats.
+   */
+  remove(item) {
+    const index = this.#items.indexOf(item, this.#head);
+    if (index === -1) return false;
+    this.#items.splice(index, 1);
+    return true;
+  }
 }
 
 export class WaitingLine {
@@ -92,6 +104,23 @@ export class WaitingLine {
     if (this.#discipline === DISCIPLINE.LIFO) return this.#stack.pop();
     const [first, second] = this.#lanes;
     return first.length > 0 ? first.shift() : second.shift();
+  }
+
+  /**
+   * Removes a customer who gives up waiting (reneging), wherever they stand
+   * in the line. The order of everyone else is unchanged.
+   *
+   * @returns {boolean} false when the customer is not in the line
+   */
+  remove(customer) {
+    if (this.#discipline === DISCIPLINE.LIFO) {
+      const index = this.#stack.indexOf(customer);
+      if (index === -1) return false;
+      this.#stack.splice(index, 1);
+      return true;
+    }
+    const lane = this.#discipline === DISCIPLINE.PRIORITY ? customer.priorityClass : 0;
+    return this.#lanes[lane].remove(customer);
   }
 
   /**

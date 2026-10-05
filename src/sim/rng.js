@@ -16,6 +16,10 @@ export const STREAM = Object.freeze({
   ARRIVAL: 1,
   SERVICE: 2,
   PRIORITY: 3,
+  // Accept/reject draws of the thinning algorithm (time-varying arrival rate).
+  THINNING: 4,
+  // Each customer's patience limit (reneging).
+  PATIENCE: 5,
 });
 
 // Initial rounds that are thrown away so the starting state gets mixed first
