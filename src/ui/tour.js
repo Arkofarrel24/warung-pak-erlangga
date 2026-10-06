@@ -19,7 +19,8 @@ const GAP = 14;
 const EDGE = 10;
 
 /**
- * @param {{ target: Element, title: string, text: string }[]} steps
+ * @param {{ target: Element | (() => Element), title: string, text: string }[]} steps
+ *   a target outside the screen being toured (in the header, say) is given as a function that finds it
  * @param {object} [options]
  * @param {() => void} [options.onEnd] called once, however the tour ends
  * @returns {{ close: () => void }}
@@ -27,6 +28,7 @@ const EDGE = 10;
 export function startTour(steps, { onEnd } = {}) {
   let index = 0;
   let frameId = null;
+  const targetOf = (step) => (typeof step.target === 'function' ? step.target() : step.target);
 
   const hole = h('div', { class: 'tour__hole' });
   const count = h('p', { class: 'tour__count' });
@@ -48,20 +50,37 @@ export function startTour(steps, { onEnd } = {}) {
   /** Keeps the light on the target and the card next to it, wherever the page has scrolled to. */
   function place() {
     frameId = window.requestAnimationFrame(place);
-    const rect = steps[index].target.getBoundingClientRect();
+    const rect = targetOf(steps[index]).getBoundingClientRect();
     const { innerWidth: width, innerHeight: height } = window;
 
     hole.style.transform = `translate(${rect.left - HALO}px, ${rect.top - HALO}px)`;
     hole.style.width = `${rect.width + HALO * 2}px`;
     hole.style.height = `${rect.height + HALO * 2}px`;
 
-    // Below the target if there is room, else above it, else at the bottom of the window.
+    // The card never covers what it is about, as long as there is room
+    // anywhere around it: below, else above, else beside it. Only when the
+    // target fills the window does the card lie over its lower part.
     const cardHeight = card.offsetHeight;
     const cardWidth = card.offsetWidth;
-    let top = rect.bottom + HALO + GAP;
-    if (top + cardHeight > height - EDGE) top = rect.top - HALO - GAP - cardHeight;
-    if (top < EDGE) top = height - cardHeight - EDGE;
-    const left = Math.min(Math.max(rect.left + rect.width / 2 - cardWidth / 2, EDGE), Math.max(width - cardWidth - EDGE, EDGE));
+    const within = (value, size, limit) => Math.min(Math.max(value, EDGE), Math.max(limit - size - EDGE, EDGE));
+    const reach = HALO + GAP;
+    let left = within(rect.left + rect.width / 2 - cardWidth / 2, cardWidth, width);
+    let top = rect.bottom + reach;
+    if (top + cardHeight > height - EDGE) {
+      top = rect.top - reach - cardHeight;
+      if (top < EDGE) {
+        const beside = within(rect.top + rect.height / 2 - cardHeight / 2, cardHeight, height);
+        if (rect.right + reach + cardWidth <= width - EDGE) {
+          left = rect.right + reach;
+          top = beside;
+        } else if (rect.left - reach - cardWidth >= EDGE) {
+          left = rect.left - reach - cardWidth;
+          top = beside;
+        } else {
+          top = height - cardHeight - EDGE;
+        }
+      }
+    }
     card.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
   }
 
@@ -75,10 +94,14 @@ export function startTour(steps, { onEnd } = {}) {
     back.hidden = index === 0;
     // He waves at the start and talks through the rest.
     gesture(guide, index === 0 ? 'wave' : 'talk');
-    nextLabel.textContent = last ? 'Siap, saya mengerti' : 'Lanjut';
-    // Something tall is brought to the top of the window, so the card fits under it.
-    const tall = step.target.getBoundingClientRect().height > window.innerHeight * 0.4;
-    step.target.scrollIntoView({ block: tall ? 'start' : 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    nextLabel.textContent = last ? 'Siap, mengerti' : 'Lanjut';
+    // The target is brought to the middle of the window if the card then fits
+    // under it, and to the top of the window if it does not.
+    const rect = targetOf(step).getBoundingClientRect();
+    const room = card.offsetHeight + HALO + GAP + EDGE;
+    const centred = (window.innerHeight - rect.height) / 2;
+    const offset = centred >= room ? centred : HALO + EDGE;
+    window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
     next.focus({ preventScroll: true });
   }
 

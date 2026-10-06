@@ -13,6 +13,12 @@ import { clock, compact, percent, rupiah } from './format.js';
 
 export const GAME_NAME = 'Warung Pak Erlangga';
 
+/** Who made the game, for the credit at the foot of the front page. */
+export const AUTHOR = Object.freeze({
+  name: 'Arko Farrel Hindrawan',
+  repo: 'https://github.com/Arkofarrel24/warung-pak-erlangga',
+});
+
 /** The four shifts, by id. */
 export const SHIFT_NAME = Object.freeze({
   pagi: 'Pagi',

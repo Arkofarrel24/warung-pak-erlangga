@@ -41,11 +41,41 @@ export function countUp(element, to, format, { from = 0, duration = 900, delay =
   window.requestAnimationFrame(tick);
 }
 
+/**
+ * A number steps to its next value like a digit on a counter: the new
+ * figure comes up from below when the value went up, and down from above
+ * when it went down. The direction is the point: it says which way the
+ * press moved the number. Short, because it is seen at every press.
+ *
+ * @param {HTMLElement} element the figure; whatever holds it should clip
+ * @param {number} direction positive = the value went up
+ */
+export function roll(element, direction) {
+  if (prefersReducedMotion() || !element.animate || direction === 0) return;
+  const from = direction > 0 ? '45%' : '-45%';
+  element.animate(
+    [
+      { transform: `translateY(${from})`, opacity: 0.25 },
+      { transform: 'translateY(0)', opacity: 1 },
+    ],
+    { duration: 150, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+  );
+}
+
+/**
+ * A wash of color over an element that fades at once: something has just
+ * been counted here. Starting it again while it runs simply starts it over.
+ */
+export function flash(element, color) {
+  if (prefersReducedMotion() || !element.animate) return;
+  element.animate([{ backgroundColor: color }, { backgroundColor: 'transparent' }], { duration: 520, easing: 'ease-out' });
+}
+
 /** A quick pop on a value that has just changed, as feedback for the press that changed it. */
 export function pop(element) {
   if (prefersReducedMotion() || !element.animate) return;
-  element.animate([{ transform: 'scale(1.18)' }, { transform: 'scale(1)' }], {
-    duration: 180,
+  element.animate([{ transform: 'scale(1.08)' }, { transform: 'scale(1)' }], {
+    duration: 160,
     easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
   });
 }
@@ -69,11 +99,11 @@ export function createLiveNumbers() {
       // The new figure rolls up into place, like a digit on a counter.
       element.animate(
         [
-          { backgroundColor: 'var(--kunyit)', transform: 'translateY(55%)', opacity: 0.2 },
-          { backgroundColor: 'var(--kunyit)', transform: 'translateY(-10%)', opacity: 1, offset: 0.6 },
+          { backgroundColor: 'var(--kunyit)', transform: 'translateY(40%)', opacity: 0.3 },
           { backgroundColor: 'var(--kunyit-soft)', transform: 'translateY(0)', opacity: 1 },
         ],
-        { duration: 420, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+        // Several of these go off at every press, so each is brief and does not overshoot.
+        { duration: 260, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
       );
     }
     return element;

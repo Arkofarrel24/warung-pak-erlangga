@@ -54,7 +54,8 @@ export function dayCalendar(game, { selected = null, planning = false } = {}) {
         [
           number,
           h('span', { class: 'cal__stamp' }, icon(gain ? 'plus' : 'minus')),
-          h('span', { class: 'cal__amount num', text: shortRupiah(Math.abs(profit)).replace(/^Rp\s/, '') }),
+          // A loss keeps its minus sign, so the color is not the only thing that tells it apart.
+          h('span', { class: 'cal__amount num', text: shortRupiah(profit).replace(/Rp\s/, '') }),
           happened && h('span', { class: 'cal__event' }, icon(happened.icon)),
           rentMark,
         ],

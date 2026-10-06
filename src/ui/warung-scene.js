@@ -98,6 +98,11 @@ export class WarungScene {
   #floaters = [];
   #staff = 1;
   #busy = [];
+  /** How many customers are waiting on the stools right now. */
+  #waiting = 0;
+  /** What the board at the end of the line shows, and when it last turned over (in #time). */
+  #signFull = false;
+  #signTurned = -Infinity;
   #soldOut = false;
   /** Seconds since drawing started; drives every small idle movement. */
   #time = 0;
@@ -172,14 +177,22 @@ export class WarungScene {
     if (width === 0) return;
 
     const compact = width < 520;
-    // Every figure is sized in units, and the unit follows the width of the scene.
-    const unit = clamp(width / 60, 6, 13);
-    const height = Math.round(clamp(width * 0.4, 210, 350));
+    const height = Math.round(clamp(width * 0.42, 210, 360));
+    // One slot of counter per pegawai, between a narrowest and a widest.
+    const slotAt = (size) => clamp((width * 0.36) / this.#maxServers, size * 3.4, size * 6);
+    // What has to fit side by side: the way in, the stools, the stall, the way out.
+    const needed = (size) =>
+      size * (5 + 3 + this.#seats * 2.1) + slotAt(size) * this.#maxServers + size * 7.4 + size * (compact ? 5 : 8);
+    // Every figure is sized in units. The unit is as large as the scene
+    // allows, so that the queue and the stall fill it: the roof must clear
+    // the top, and everything above must fit across.
+    let unit = Math.min(clamp(width / 52, 6, 17), height / 21);
+    while (unit > 6 && needed(unit) > width) unit -= 0.5;
     const ground = height - unit * 4.6;
     const exitZone = unit * (compact ? 5 : 8);
 
-    // The stall: one slot of counter per pegawai.
-    const slot = clamp((width * 0.36) / this.#maxServers, unit * 3.4, unit * 6);
+    // The stall.
+    const slot = slotAt(unit);
     // The glass display case of dishes stands at the far end of the counter.
     const caseWidth = unit * 5;
     const stallWidth = slot * this.#maxServers + unit * 2.4 + caseWidth;
@@ -194,6 +207,17 @@ export class WarungScene {
     const stools = Array.from({ length: this.#seats }, (_, k) => head - k * spacing);
     // Where a customer who finds no seat stops and turns around.
     const door = Math.max(head - this.#seats * spacing, unit * 3);
+    // The power pole stands a third of the way along the street, or just
+    // short of the stall when a long counter reaches that far. The board
+    // that counts the stools stands at the end of the line, and steps aside
+    // when that would put it on top of the pole.
+    const poleX = Math.min(width * 0.36, stallX - unit * 3);
+    const signX = Math.abs(door - poleX) < unit * 3.6 ? poleX - unit * 3.6 : door;
+    // The palm stands clear of the corner where Pak Erlangga watches from.
+    // When the line reaches all the way back there is no room for it, and
+    // the street does without.
+    const palmX = width * 0.15;
+    const palm = signX - palmX > unit * 6.5;
 
     const ratio = window.devicePixelRatio || 1;
     canvas.style.height = `${height}px`;
@@ -216,6 +240,12 @@ export class WarungScene {
       caseWidth,
       stools,
       door,
+      poleX,
+      signX,
+      palmX,
+      palm,
+      // Where a sale shows: beside the stall, over the head of whoever walks off with the food.
+      payX: stallX + stallWidth + exitZone * 0.5,
       entrance: -unit * 3,
       exit: width + unit * 3,
     };
@@ -249,19 +279,26 @@ export class WarungScene {
       actor.targetX = layout.door - unit * (2.5 + (record.customer.id % 5) * 1.3);
       actor.targetY = layout.ground;
       actor.hesitate = HESITATE_SECONDS;
-      this.#float(record.outcome === ARRIVAL_OUTCOME.REJECTED ? 'penuh' : 'habis', actor.targetX, layout.ground - unit * 6, record.outcome === ARRIVAL_OUTCOME.REJECTED ? this.#colors.balked : this.#colors.soldOut);
+      const full = record.outcome === ARRIVAL_OUTCOME.REJECTED;
+      this.#float(full ? 'penuh' : 'habis', actor.targetX, layout.ground - unit * 6, full ? this.#colors.balked : this.#colors.soldOut);
     } else if (record.type === EVENT.DEPARTURE) {
       const actor = this.#actors.get(record.customer.id);
       if (!actor) return;
       actor.state = STATE.HAPPY;
       actor.targetX = layout.exit;
       actor.targetY = layout.ground + unit * 1.6;
-      const booth = layout.booths[record.serverIndex] ?? actor.x;
-      if (this.#priceLabel) this.#float(this.#priceLabel, booth, layout.counterTop - unit * 2, this.#colors.served);
+      // The price goes with whoever has just paid, over their head as they
+      // walk off: clear of the banner and of the faces behind the counter.
+      // (A service can be over before the customer has walked up to the
+      // counter; the price still shows at the counter, where it was paid.)
+      if (this.#priceLabel) {
+        const booth = layout.booths[record.serverIndex] ?? actor.x;
+        this.#float(this.#priceLabel, booth, layout.ground - unit * 4.1, this.#colors.daun, { actor, from: booth });
+      }
     } else if (record.type === EVENT.RENEGE) {
       this.#leaveUnserved(record.customer, STATE.ANGRY);
       const actor = this.#actors.get(record.customer.id);
-      if (actor) this.#float('kelamaan!', actor.x, layout.ground - unit * 6.4, this.#colors.reneged);
+      if (actor) this.#float('kelamaan!', actor.x, layout.ground - unit * 5.9, this.#colors.reneged);
     } else if (record.type === EVENT.SOLD_OUT) {
       for (const customer of record.dismissed) {
         this.#leaveUnserved(customer, STATE.SAD);
@@ -305,7 +342,9 @@ export class WarungScene {
     simulation.servers.forEach((customer, i) => {
       if (customer) place(customer, booths[i], ground + unit * 0.9, STATE.SERVICE);
     });
-    simulation.line.peek(stools.length).forEach((customer, k) => place(customer, stools[k], ground, STATE.QUEUE));
+    const waiting = simulation.line.peek(stools.length);
+    waiting.forEach((customer, k) => place(customer, stools[k], ground, STATE.QUEUE));
+    this.#waiting = waiting.length;
 
     // Anyone the engine no longer holds and who was not seen leaving.
     for (const actor of this.#actors.values()) {
@@ -360,6 +399,7 @@ export class WarungScene {
     this.#drawRoof(closed);
     this.#life.drawSmoke(context, layout);
     this.#life.drawLights(context, layout, this.#colors, dayHour >= LIGHTS_ON);
+    this.#drawWaitingSign(closed);
     this.#drawStools();
     this.#life.drawCat(context, layout, this.#colors);
     this.#moveActors(dt, pace);
@@ -412,7 +452,8 @@ export class WarungScene {
     actor.targetY = ground + unit * 1.6;
   }
 
-  #float(text, x, y, color) {
+  /** @param {{ actor: object, from: number }} [follow] a figure the word stays above once it has passed `from` */
+  #float(text, x, y, color, follow = null) {
     // The same word again on the same spot would only smear the first one.
     const { unit } = this.#layout;
     const repeated = this.#floaters.some(
@@ -420,7 +461,7 @@ export class WarungScene {
     );
     if (repeated) return;
     if (this.#floaters.length >= MAX_FLOATERS) this.#floaters.shift();
-    this.#floaters.push({ text, x, y, color, age: 0 });
+    this.#floaters.push({ text, x, y, color, age: 0, follow });
   }
 
   #moveActors(dt, pace) {
@@ -848,7 +889,7 @@ export class WarungScene {
     context.stroke();
 
     // A power pole, with the wires that sag from it across the street.
-    const poleX = width * 0.36;
+    const { poleX } = this.#layout;
     const poleTop = ground - unit * 15;
     context.strokeStyle = 'rgb(42 27 18 / 0.7)';
     context.lineWidth = 1.2;
@@ -871,7 +912,8 @@ export class WarungScene {
     context.strokeRect(poleX - unit * 1.6, poleTop + unit * 0.4, unit * 3.2, unit * 0.42);
 
     // A coconut palm at the roadside, its fronds swaying a little.
-    const palmX = width * 0.07;
+    const { palmX, palm } = this.#layout;
+    if (!palm) return;
     const crownX = palmX + unit * 1.1;
     const crownY = ground - unit * 10.5;
     const sway = Math.sin(this.#time * 0.9) * 0.05;
@@ -1205,6 +1247,25 @@ export class WarungScene {
     const colors = [this.#colors.sambal, this.#colors.biru, this.#colors.daun];
     context.strokeStyle = this.#colors.ink;
     context.lineWidth = 1.6;
+    if (stools.length > 0) {
+      // A woven mat under the stools: where the line is, also when nobody is in it.
+      const matLeft = stools.at(-1) - unit * 1.9;
+      const matRight = stools[0] + unit * 1.9;
+      context.fillStyle = this.#colors.woodLight;
+      this.#roundRect(matLeft, ground + unit * 0.12, matRight - matLeft, unit * 0.62, unit * 0.2);
+      context.fill();
+      context.stroke();
+      context.strokeStyle = 'rgb(42 27 18 / 0.3)';
+      context.lineWidth = 1;
+      context.beginPath();
+      for (let x = matLeft + unit * 0.7; x < matRight - unit * 0.3; x += unit * 0.7) {
+        context.moveTo(x, ground + unit * 0.2);
+        context.lineTo(x, ground + unit * 0.66);
+      }
+      context.stroke();
+      context.strokeStyle = this.#colors.ink;
+      context.lineWidth = 1.6;
+    }
     stools.forEach((x, k) => {
       context.fillStyle = colors[k % colors.length];
       context.beginPath();
@@ -1222,7 +1283,62 @@ export class WarungScene {
     });
   }
 
-  /** Short words that rise and fade: a sale at the counter, a customer lost. */
+  /**
+   * A board on a post at the end of the line: how many of the stools are
+   * taken. When all of them are, it turns red and says so, which is the
+   * moment the next customer to arrive walks on (the system holds K).
+   */
+  #drawWaitingSign(closed) {
+    const { stools, signX, ground, unit } = this.#layout;
+    if (stools.length === 0 || closed) return;
+    const context = this.#context;
+    const full = this.#waiting >= stools.length;
+    if (full !== this.#signFull) {
+      this.#signFull = full;
+      this.#signTurned = this.#time;
+    }
+    // Turning over takes a fifth of a second: the board closes to an edge
+    // showing its old face, and opens again showing the new one.
+    const turn = clamp((this.#time - this.#signTurned) / 0.2, 0, 1);
+    const showsFull = turn < 0.5 ? !full : full;
+    const open = Math.abs(Math.cos(turn * Math.PI));
+    // Too small to read a second line on a narrow screen.
+    const labelled = unit >= 9;
+    const boardWidth = unit * (labelled ? 5 : 5.6);
+    const boardHeight = unit * (labelled ? 2.7 : 2.1);
+    const boardTop = ground - unit * 5.4 - boardHeight;
+
+    context.save();
+    context.strokeStyle = this.#colors.ink;
+    context.lineWidth = 1.6;
+    context.fillStyle = this.#colors.wood;
+    context.fillRect(signX - unit * 0.2, boardTop + boardHeight, unit * 0.4, ground - boardTop - boardHeight);
+    context.strokeRect(signX - unit * 0.2, boardTop + boardHeight, unit * 0.4, ground - boardTop - boardHeight);
+
+    context.translate(signX, boardTop + boardHeight / 2);
+    context.scale(1, Math.max(open, 0.06));
+    context.lineWidth = 2;
+    context.fillStyle = showsFull ? this.#colors.sambal : this.#colors.krem;
+    this.#roundRect(-boardWidth / 2, -boardHeight / 2, boardWidth, boardHeight, unit * 0.35);
+    context.fill();
+    context.stroke();
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillStyle = showsFull ? this.#colors.krem : this.#colors.ink;
+    const count = showsFull ? 'PENUH' : `${Math.min(this.#waiting, stools.length - (full ? 1 : 0))}/${stools.length}`;
+    if (labelled) {
+      context.font = `800 ${Math.round(unit * 0.78)}px ${this.#colors.display}`;
+      context.fillText('BANGKU', 0, -boardHeight * 0.24);
+      context.font = `800 ${Math.round(unit * (showsFull ? 1.15 : 1.35))}px ${this.#colors.display}`;
+      context.fillText(count, 0, boardHeight * 0.2);
+    } else {
+      context.font = `800 ${Math.max(Math.round(unit * (showsFull ? 1.25 : 1.5)), 8)}px ${this.#colors.display}`;
+      context.fillText(count, 0, unit * 0.08);
+    }
+    context.restore();
+  }
+
+  /** Short words that rise and fade: a sale beside the stall, a customer lost. */
   #drawFloaters(dt) {
     const { unit } = this.#layout;
     const context = this.#context;
@@ -1231,16 +1347,24 @@ export class WarungScene {
     context.textBaseline = 'middle';
     context.font = `800 ${Math.round(unit * 1.55)}px ${this.#colors.display}`;
     context.lineJoin = 'round';
+    const { width } = this.#layout;
     this.#floaters = this.#floaters.filter((floater) => {
       floater.age += dt / 1.1;
       if (floater.age >= 1) return false;
-      const y = floater.y - floater.age * unit * 3.2;
-      context.globalAlpha = floater.age < 0.7 ? 1 : 1 - (floater.age - 0.7) / 0.3;
-      context.lineWidth = 3.5;
+      if (floater.follow) floater.x = Math.max(floater.follow.actor.x, floater.follow.from);
+      // It starts fast and settles, and stops short of whatever hangs from the eave.
+      const rise = 1 - (1 - floater.age) ** 3;
+      const y = floater.y - rise * unit * 2.2;
+      // A word near the edge stays whole inside the picture.
+      const half = context.measureText(floater.text).width / 2 + 4;
+      const x = Math.min(Math.max(floater.x, half), width - half);
+      // It comes in at once and goes out over its last third.
+      context.globalAlpha = floater.age < 0.66 ? Math.min(floater.age / 0.08, 1) : 1 - (floater.age - 0.66) / 0.34;
+      context.lineWidth = 4;
       context.strokeStyle = this.#colors.surface;
-      context.strokeText(floater.text, floater.x, y);
+      context.strokeText(floater.text, x, y);
       context.fillStyle = floater.color;
-      context.fillText(floater.text, floater.x, y);
+      context.fillText(floater.text, x, y);
       return true;
     });
     context.restore();

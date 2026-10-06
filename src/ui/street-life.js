@@ -69,22 +69,29 @@ export class StreetLife {
     for (const puff of this.#puffs) puff.age += dt / 3.2;
     this.#puffs = this.#puffs.filter((puff) => puff.age < 1);
 
-    // The cat: it sits for a while, then walks to another spot.
+    // The cat: it sits for a while, then walks to another spot. Its patch of
+    // pavement ends before the board at the end of the line, so it keeps off
+    // the mat; on a day when the line reaches all the way back, it is elsewhere.
     const cat = this.#cat;
-    const home = [width * 0.07 + unit * 3.5, Math.max(width * 0.36 - unit * 3, width * 0.07 + unit * 5)];
-    if (cat.x === null || cat.x > home[1] + unit || cat.x < home[0] - unit) cat.x = between(...home);
-    if (cat.target === null) {
-      cat.rest -= dt;
-      if (cat.rest <= 0) cat.target = between(...home);
+    const home = [unit * 2, Math.min(layout.poleX - unit * 2.5, layout.signX - unit * 3.2)];
+    if (home[1] - home[0] < unit * 3) {
+      cat.x = null;
+      cat.target = null;
     } else {
-      const step = unit * 2.4 * dt;
-      cat.facing = Math.sign(cat.target - cat.x) || cat.facing;
-      if (Math.abs(cat.target - cat.x) <= step) {
-        cat.x = cat.target;
-        cat.target = null;
-        cat.rest = between(...CAT_REST);
+      if (cat.x === null || cat.x > home[1] + unit || cat.x < home[0] - unit) cat.x = between(...home);
+      if (cat.target === null) {
+        cat.rest -= dt;
+        if (cat.rest <= 0) cat.target = between(...home);
       } else {
-        cat.x += cat.facing * step;
+        const step = unit * 2.4 * dt;
+        cat.facing = Math.sign(cat.target - cat.x) || cat.facing;
+        if (Math.abs(cat.target - cat.x) <= step) {
+          cat.x = cat.target;
+          cat.target = null;
+          cat.rest = between(...CAT_REST);
+        } else {
+          cat.x += cat.facing * step;
+        }
       }
     }
 
@@ -112,7 +119,8 @@ export class StreetLife {
     for (const vehicle of this.#traffic) {
       context.save();
       context.translate(vehicle.x, ground);
-      context.scale(vehicle.direction, 1);
+      // A little smaller than the people at the stall: the road lies behind the pavement.
+      context.scale(vehicle.direction * 0.86, 0.86);
       context.lineJoin = 'round';
       context.lineCap = 'round';
       context.strokeStyle = colors.ink;

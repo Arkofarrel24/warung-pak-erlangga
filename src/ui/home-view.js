@@ -10,8 +10,9 @@ import { compact, rupiah } from './format.js';
 import { prefersReducedMotion } from './motion.js';
 import { bubble } from './pak-erlangga.js';
 import { phaseAt, setPhase } from './phase.js';
+import { reputationRules } from './reputation-guide.js';
 import { createScenePlayer } from './scene-player.js';
-import { EVENT_TEXT, GAME_NAME, SHOP_NAME } from './text.js';
+import { AUTHOR, EVENT_TEXT, GAME_NAME, SHOP_NAME } from './text.js';
 import { WarungScene } from './warung-scene.js';
 
 /** The street scene runs through a day and a short night, then starts over. */
@@ -94,13 +95,6 @@ const SCENE_MARKS = [
   ['stools', 'Bangku plastik', 'Tempat menunggu. Banyaknya bangku adalah panjang antrean paling banyak.'],
 ];
 
-/** The three figures chalked on the board at the top of every screen. */
-const BOARD_FIGURES = [
-  ['sun', 'Hari', `Hari ke berapa dari ${DAY.count}.`],
-  ['wallet', 'Kas', 'Uang warung. Kalau habis, permainan selesai.'],
-  ['star', 'Reputasi', 'Dari 0 sampai 100. Makin tinggi, makin banyak yang datang besok.'],
-];
-
 /** The letters of queueing theory, as they appear on the morning screen and in the report. */
 const GLOSSARY = [
   ['λ', 'Laju kedatangan', 'berapa pelanggan datang per jam. Naik turun mengikuti jam, harga, dan reputasi.'],
@@ -113,130 +107,109 @@ const GLOSSARY = [
   ['Lq', 'Panjang antrean', 'rata-rata banyaknya orang yang sedang menunggu.'],
 ];
 
+/**
+ * How to play, short enough to read before starting: the goal, the three
+ * parts of a day, and the rules that change the game. Everything that is
+ * only looked up (the marks in the scene, the events, the letters) is in a
+ * list to open.
+ */
 function guide(startButton) {
-  const block = (number, title, children) =>
-    h('section', { class: 'guide__block', 'aria-labelledby': `guide-${number}` }, [
-      h('h3', { class: 'guide__title', id: `guide-${number}` }, [
-        h('span', { class: 'guide__number', 'aria-hidden': 'true', text: String(number) }),
-        title,
-      ]),
-      children,
-    ]);
-  const step = (iconName, title, text) =>
-    h('li', { class: 'card how__step' }, [
+  const act = (iconName, title, text) =>
+    h('li', { class: 'how__step' }, [
       h('span', { class: 'how__icon' }, icon(iconName)),
-      h('h4', { text: title }),
-      h('p', { text }),
+      h('div', { class: 'how__words' }, [h('h3', { text: title }), h('p', { text })]),
     ]);
-  const eventList = (kind) =>
-    h(
-      'ul',
-      { class: 'happenings__list' },
-      Object.entries(EVENTS.catalog)
-        .filter(([, spec]) => spec.kind === kind)
-        .map(([id]) =>
-          h('li', { class: 'happening' }, [
-            h('span', { class: 'happening__icon' }, icon(EVENT_TEXT[id].icon)),
-            h('div', {}, [h('strong', { text: EVENT_TEXT[id].name }), h('p', { text: EVENT_TEXT[id].tutorial })]),
-          ]),
-        ),
-    );
+  const rule = (mark, text) => h('li', {}, [mark, h('span', { text })]);
+  const more = (title, children) => h('details', { class: 'details details--block' }, [h('summary', { text: title }), children]);
+  const eventGroup = (kind, iconName, title, lead) =>
+    h('div', { class: 'happenings__group' }, [
+      h('h3', {}, [icon(iconName), title]),
+      h('p', { class: 'happenings__lead', text: lead }),
+      h(
+        'ul',
+        { class: 'happenings__list' },
+        Object.entries(EVENTS.catalog)
+          .filter(([, spec]) => spec.kind === kind)
+          .map(([id]) =>
+            h('li', { class: 'happening' }, [
+              h('span', { class: 'happening__icon' }, icon(EVENT_TEXT[id].icon)),
+              h('div', {}, [h('strong', { text: EVENT_TEXT[id].name }), h('p', { text: EVENT_TEXT[id].tutorial })]),
+            ]),
+          ),
+      ),
+    ]);
 
   const heading = h('h2', { class: 'section-title section-title--center', id: 'guide-title', tabindex: '-1', text: 'Cara main' });
   const element = h('section', { class: 'guide', 'aria-labelledby': 'guide-title' }, [
-    heading,
-    h('p', { class: 'guide__lead', text: `Dua menit membaca, ${DAY.count} hari menjaga warung.` }),
+    h('div', { class: 'guide__head' }, [
+      heading,
+      h('p', {
+        class: 'goal__text',
+        text: `Jaga warung ${DAY.count} hari tanpa kehabisan kas, lalu tutup buku dengan laba dan reputasi setinggi mungkin.`,
+      }),
+    ]),
 
-    block(1, 'Tujuanmu', [
-      h('div', { class: 'card goal' }, [
-        h('span', { class: 'goal__icon' }, icon('target')),
+    h('ol', { class: 'how__steps' }, [
+      act('sun', 'Pagi: atur warung', `Pegawai, harga, stok, dan bangku tunggu. Mampir ke ${SHOP_NAME} kalau kasnya ada.`),
+      act('shop', 'Siang: warung buka', 'Pelanggan datang, mengantre, dilayani. Yang kelamaan menunggu bisa batal antre.'),
+      act('moon', 'Malam: baca laporan', 'Laba, reputasi, dan ukuran antrean yang sungguhan. Besok coba lebih baik.'),
+    ]),
+
+    h('ul', { class: 'goal__rules' }, [
+      rule(
+        h('span', { class: 'goal__stars', 'aria-hidden': 'true' }, [icon('star'), icon('star'), icon('star')]),
+        `Bertahan ${DAY.count} hari dapat satu bintang. Kas akhir ${rupiah(STARS.two)} dapat dua, dan ${rupiah(STARS.three)} dapat tiga.`,
+      ),
+      rule(
+        h('span', { class: 'goal__mark goal__mark--warning', 'aria-hidden': 'true' }, icon('up')),
+        `Mulai hari ke-${RENT_RISE.fromDay} sewa naik ${rupiah(RENT_RISE.amount)} sehari. Warung yang jalan di tempat akan mulai rugi.`,
+      ),
+      rule(
+        h('span', { class: 'goal__mark', 'aria-hidden': 'true' }, icon('users')),
+        'Reputasi berjalan dari 0 sampai 100. Makin tinggi, makin banyak yang datang besok.',
+      ),
+    ]),
+
+    h('div', { class: 'guide__more' }, [
+      more(
+        'Arti gambar di warung',
+        h(
+          'ul',
+          { class: 'marks' },
+          SCENE_MARKS.map(([name, title, text]) =>
+            h('li', { class: 'mark' }, [figure(name), h('div', {}, [h('strong', { text: title }), h('p', { text })])]),
+          ),
+        ),
+      ),
+      more('Kejadian yang kadang datang', [
         h('p', {
-          class: 'goal__text',
-          text: `Jaga warung ${DAY.count} hari tanpa kehabisan kas, lalu tutup buku dengan laba dan reputasi setinggi mungkin.`,
+          class: 'details__lead',
+          text:
+            `Mulai hari ke-${EVENTS.firstDay}, kira-kira ${compact(EVENTS.chance * 10)} dari 10 hari membawa satu kejadian. ` +
+            'Hari pertama selalu tenang.',
+        }),
+        h('div', { class: 'happenings' }, [
+          eventGroup(EVENT_KIND.NEWS, 'megaphone', 'Kabar pagi', 'Kamu diberi tahu sebelum mengatur warung, jadi masih bisa bersiap.'),
+          eventGroup(EVENT_KIND.SURPRISE, 'zap', 'Kejutan', 'Baru ketahuan setelah warung buka, jadi tidak sempat bersiap.'),
+        ]),
+      ]),
+      more('Reputasi: apa yang menaikkan dan menurunkannya', reputationRules()),
+      more('Kamus huruf antrean (λ, μ, ρ, dan kawan-kawan)', [
+        h('p', {
+          class: 'details__lead',
+          text: 'Tidak perlu dihafal. Huruf-huruf ini muncul di layar pagi dan di laporan malam, selalu dengan penjelasannya.',
         }),
         h(
           'dl',
-          { class: 'goal__figures' },
-          BOARD_FIGURES.map(([iconName, name, text]) =>
-            h('div', { class: 'goal__figure' }, [h('dt', {}, [icon(iconName), name]), h('dd', { text })]),
+          { class: 'glossary' },
+          GLOSSARY.map(([symbol, name, text]) =>
+            h('div', { class: 'glossary__item' }, [
+              h('dt', {}, [h('span', { class: 'chip chip--param', text: symbol }), name]),
+              h('dd', { text }),
+            ]),
           ),
         ),
-        h('ul', { class: 'goal__rules' }, [
-          h('li', {}, [
-            h('span', { class: 'goal__stars', 'aria-hidden': 'true' }, [icon('star'), icon('star'), icon('star')]),
-            h('span', {
-              text:
-                `Bertahan ${DAY.count} hari dapat satu bintang. Kas akhir ${rupiah(STARS.two)} dapat dua, ` +
-                `dan ${rupiah(STARS.three)} dapat tiga.`,
-            }),
-          ]),
-          h('li', {}, [
-            h('span', { class: 'goal__warning', 'aria-hidden': 'true' }, icon('up')),
-            h('span', {
-              text:
-                `Mulai hari ke-${RENT_RISE.fromDay} sewa naik ${rupiah(RENT_RISE.amount)} sehari. ` +
-                'Warung yang jalan di tempat akan mulai rugi.',
-            }),
-          ]),
-        ]),
       ]),
-    ]),
-
-    block(2, 'Satu hari, tiga babak', [
-      h('ol', { class: 'how__steps' }, [
-        step('sun', 'Pagi: atur warung', `Pegawai, harga, stok, dan bangku tunggu. Mampir ke ${SHOP_NAME} kalau kasnya ada.`),
-        step('shop', 'Siang: warung buka', 'Pelanggan datang, mengantre, dilayani. Yang kelamaan menunggu bisa batal antre.'),
-        step('moon', 'Malam: baca laporan', 'Laba, reputasi, dan ukuran antrean yang sungguhan. Besok coba lebih baik.'),
-      ]),
-    ]),
-
-    block(3, 'Arti gambar di warung', [
-      h(
-        'ul',
-        { class: 'marks' },
-        SCENE_MARKS.map(([name, title, text]) =>
-          h('li', { class: 'card mark' }, [figure(name), h('div', {}, [h('strong', { text: title }), h('p', { text })])]),
-        ),
-      ),
-    ]),
-
-    block(4, 'Kadang ada kejadian', [
-      h('p', {
-        class: 'guide__text',
-        text:
-          `Mulai hari ke-${EVENTS.firstDay}, kira-kira ${compact(EVENTS.chance * 10)} dari 10 hari membawa satu kejadian. ` +
-          'Hari pertama selalu tenang.',
-      }),
-      h('div', { class: 'happenings' }, [
-        h('div', { class: 'card happenings__group' }, [
-          h('h4', {}, [icon('megaphone'), 'Kabar pagi']),
-          h('p', { class: 'happenings__lead', text: 'Kamu diberi tahu sebelum mengatur warung, jadi masih bisa bersiap.' }),
-          eventList(EVENT_KIND.NEWS),
-        ]),
-        h('div', { class: 'card happenings__group happenings__group--surprise' }, [
-          h('h4', {}, [icon('zap'), 'Kejutan']),
-          h('p', { class: 'happenings__lead', text: 'Baru ketahuan setelah warung buka, jadi tidak sempat bersiap.' }),
-          eventList(EVENT_KIND.SURPRISE),
-        ]),
-      ]),
-    ]),
-
-    h('details', { class: 'details guide__glossary' }, [
-      h('summary', { text: 'Kamus huruf antrean (λ, μ, ρ, dan kawan-kawan)' }),
-      h('p', {
-        class: 'guide__text',
-        text: 'Tidak perlu dihafal. Huruf-huruf ini muncul di layar pagi dan di laporan malam, selalu dengan penjelasannya.',
-      }),
-      h(
-        'dl',
-        { class: 'glossary' },
-        GLOSSARY.map(([symbol, name, text]) =>
-          h('div', { class: 'glossary__item' }, [
-            h('dt', {}, [h('span', { class: 'chip chip--param', text: symbol }), name]),
-            h('dd', { text }),
-          ]),
-        ),
-      ),
     ]),
 
     h('p', {
@@ -248,6 +221,17 @@ function guide(startButton) {
     startButton && h('div', { class: 'home__actions' }, startButton),
   ]);
   return { element, heading };
+}
+
+/** Who made this, and where the code is: at the foot of the front page. */
+function credit() {
+  return h('footer', { class: 'credit' }, [
+    h('p', {}, [
+      `Dibuat oleh ${AUTHOR.name}. `,
+      h('a', { href: AUTHOR.repo, rel: 'noopener', text: 'Kode dan cara kerjanya ada di GitHub' }),
+      '.',
+    ]),
+  ]);
 }
 
 export function renderHome(container, { store, startNewGame }) {
@@ -262,26 +246,24 @@ export function renderHome(container, { store, startNewGame }) {
   const resume = () => h('a', { class: 'btn btn--primary', href: '#/pagi' }, [icon('play'), `Lanjutkan hari ke-${game.day}`]);
   // The tutorial ends with the same way in as the top of the page.
   const tutorial = guide(playing ? resume() : start(game ? 'Main lagi' : 'Mulai kelola warung'));
-  const toGuide = h('button', { type: 'button', class: 'btn' }, [icon('book'), 'Cara main']);
+  const toGuide = h('button', { type: 'button', class: 'btn btn--quiet' }, [icon('book'), 'Cara main']);
   toGuide.addEventListener('click', () => {
     tutorial.element.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
     tutorial.heading.focus({ preventScroll: true });
   });
 
-  let actions;
+  // One way in, and the quieter choices under it.
+  const quiet = (attributes, iconName, label) => h(attributes.href ? 'a' : 'button', { class: 'btn btn--quiet', ...attributes }, [icon(iconName), label]);
+  let primary;
+  const others = [toGuide];
   if (playing) {
-    actions = [
-      resume(),
-      toGuide,
-      h('button', { type: 'button', class: 'btn', onclick: () => startNewGame({ confirm: true }) }, [
-        icon('refresh'),
-        'Mulai dari awal',
-      ]),
-    ];
+    primary = resume();
+    others.push(quiet({ type: 'button', onclick: () => startNewGame({ confirm: true }) }, 'refresh', 'Mulai ulang'));
   } else if (game) {
-    actions = [start('Main lagi'), toGuide, h('a', { class: 'btn', href: '#/akhir' }, [icon('book'), 'Lihat hasil terakhir'])];
+    primary = start('Main lagi');
+    others.push(quiet({ href: '#/akhir' }, 'book', 'Lihat hasil terakhir'));
   } else {
-    actions = [start('Mulai kelola warung'), toGuide];
+    primary = start('Mulai kelola warung');
   }
 
   const canvas = h('canvas', { class: 'stage__canvas', 'aria-hidden': 'true' });
@@ -292,19 +274,17 @@ export function renderHome(container, { store, startNewGame }) {
   container.append(
     h('section', { class: 'view view--home', 'aria-labelledby': 'view-title' }, [
       h('div', { class: 'home__hero' }, [
-        h('div', { class: 'sign' }, [
-          h('p', { class: 'sign__eyebrow', text: 'Sedia nasi, lauk, dan teori antrean' }),
-          heading,
-        ]),
-        h('figure', { class: 'stage stage--home' }, [
-          h('div', { class: 'stage__frame' }, [canvas, toggle]),
-          h('figcaption', {
-            class: 'stage__caption',
-            text: 'Ini bukan video. Yang kamu lihat adalah mesin simulasi game ini sedang berjalan.',
-          }),
-        ]),
+        // Painted the way warung signs are: the name, and under it what is served.
+        h('div', { class: 'sign' }, [heading, h('p', { class: 'sign__menu', text: 'Sedia nasi, lauk, dan teori antrean' })]),
+        h('div', { class: 'stage stage--home' }, [h('div', { class: 'stage__frame' }, [canvas, toggle])]),
+        // The way in hangs on the bottom edge of the scene, as the sign hangs on its top.
+        h('div', { class: 'home__start' }, primary),
         h('p', { class: 'home__tagline', text: `Kelola warung selama ${DAY.count} hari. Jangan sampai kas habis.` }),
-        h('div', { class: 'home__actions' }, actions),
+        h('p', {
+          class: 'stage__caption',
+          text: 'Ini bukan video. Yang kamu lihat adalah mesin simulasi game ini sedang berjalan.',
+        }),
+        h('div', { class: 'home__actions' }, others),
         store.saveFailed &&
           h('p', { class: 'notice' }, [
             icon('info'),
@@ -320,13 +300,14 @@ export function renderHome(container, { store, startNewGame }) {
             h('p', {
               text:
                 'Tiap malam kita baca laporannya sama-sama. Antrean itu ada ilmunya, dan warung ini tempat belajarnya. ' +
-                'Baca dulu cara mainnya di bawah, ya.',
+                'Pagi pertama nanti saya temani, satu per satu.',
             }),
           ],
           { greet: 'wave' },
         ),
       ]),
       tutorial.element,
+      credit(),
     ]),
   );
   street.start();

@@ -63,11 +63,19 @@ function standingStill(game) {
   const { reneged, rejected, soldOut } = yesterday.results;
   const lost = reneged + rejected + soldOut;
   if (!unchanged || lost === 0) return null;
-  return (
+  const people = integer(lost);
+  const worth = rupiah(lost * yesterday.decisions.price);
+  // The same point, put differently from one morning to the next.
+  const ways = [
     `Omong-omong, pengaturanmu kemarin sama persis dengan ${before ? 'hari sebelumnya' : 'cara saya dulu'}. ` +
-    `Padahal ${integer(lost)} orang pulang tanpa makan: itu ${rupiah(lost * yesterday.decisions.price)} yang lewat begitu saja. ` +
-    'Coba ubah satu hal hari ini, lalu lihat bedanya di laporan.'
-  );
+      `Padahal ${people} orang pulang tanpa makan: itu ${worth} yang lewat begitu saja. ` +
+      'Coba ubah satu hal hari ini, lalu lihat bedanya di laporan.',
+    `Pengaturannya masih sama seperti kemarin, ya? ${people} orang lagi pulang tanpa makan, senilai ${worth}. ` +
+      'Satu perubahan kecil saja sudah cukup untuk melihat bedanya.',
+    `Hari ini mau coba yang lain? Dengan pengaturan yang sama, kemarin ${people} orang lepas. ` +
+      `Itu ${worth} yang tidak jadi masuk kas.`,
+  ];
+  return ways[game.day % ways.length];
 }
 
 /** The rent rise of the second week, said ahead of time and again when it arrives. */
@@ -108,8 +116,12 @@ function morningWords(game) {
   return [
     paragraph(
       `Kemarin ada ${integer(arrivals)} orang yang datang, dan ${integer(served)} di antaranya kebagian makan. ` +
-        (lost.length > 0 ? `Sayangnya ${list(lost)}. ` : 'Tidak ada yang pulang kecewa, bagus! ') +
-        (profit >= 0 ? `Hasilnya, kita untung ${rupiah(profit)}.` : `Hasilnya, kita rugi ${rupiah(-profit)}.`),
+        (lost.length > 0 ? `Sayangnya ${list(lost)}. ` : 'Tidak ada yang pulang kecewa. ') +
+        (profit >= 0
+          ? `Hasilnya, kita untung ${rupiah(profit)}.`
+          : lost.length > 0
+            ? `Hasilnya, kita rugi ${rupiah(-profit)}.`
+            : `Tapi tetap rugi ${rupiah(-profit)}: biaya hari itu lebih besar daripada hasil jualannya.`),
     ),
     paragraph(standingStill(game)),
     paragraph(rentWords(game.day)),
@@ -123,21 +135,26 @@ function morningWords(game) {
  */
 function capacityChart(arrivals, capacity, hoursPerShift) {
   const width = 320;
-  const height = 132;
-  const left = 30;
+  const height = 140;
+  const left = 32;
   const right = 6;
   const top = 10;
-  const bottom = 22;
+  const bottom = 26;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
   const hours = arrivals.length;
   const slot = plotWidth / hours;
-  const peak = Math.max(...arrivals, ...capacity, 1) * 1.12;
+  // With no arrivals to show yet, the line sits at two thirds of the height.
+  const peak = Math.max(...arrivals, ...capacity, 1) * (Math.max(...arrivals) > 0 ? 1.12 : 1.5);
   const y = (value) => top + plotHeight * (1 - value / peak);
   const hourCapacity = (hour) => capacity[Math.min(Math.floor(hour / hoursPerShift), capacity.length - 1)];
 
-  const gridValue = Math.ceil(peak / 2 / 10) * 10;
-  const grid = [0, gridValue].filter((value) => value < peak);
+  // The axis is marked at zero and at each level of capacity, which are the
+  // heights the bars are read against. Levels too close to tell apart share a mark.
+  const grid = [0];
+  for (const level of [...new Set(capacity)].sort((a, b) => a - b)) {
+    if (y(grid.at(-1)) - y(level) >= 14) grid.push(level);
+  }
 
   let line = '';
   for (let hour = 0; hour < hours; hour++) {
@@ -149,7 +166,7 @@ function capacityChart(arrivals, capacity, hoursPerShift) {
     ...grid.map((value) =>
       svg('g', {}, [
         svg('line', { class: 'capacity-chart__grid', x1: left, x2: width - right, y1: y(value), y2: y(value) }),
-        svg('text', { class: 'capacity-chart__tick', x: left - 6, y: y(value) + 4, 'text-anchor': 'end', text: String(value) }),
+        svg('text', { class: 'capacity-chart__tick', x: left - 7, y: y(value) + 4, 'text-anchor': 'end', text: compact(value, 0) }),
       ]),
     ),
     ...arrivals.map((count, hour) =>
@@ -168,7 +185,7 @@ function capacityChart(arrivals, capacity, hoursPerShift) {
         ? svg('text', {
             class: 'capacity-chart__tick',
             x: left + hour * slot + slot / 2,
-            y: height - 6,
+            y: height - 7,
             'text-anchor': 'middle',
             text: hourTick(hour),
           })
@@ -310,8 +327,12 @@ export function renderMorning(container, { store, openWarung }) {
     },
   });
 
-  function decisionCard({ iconName, id, label, control, help, error, extra }) {
-    return h('article', { class: 'card decision' }, [
+  /**
+   * One choice. A card with something to show next to its control (`aside`)
+   * takes the whole row, control on the left and the rest on the right.
+   */
+  function decisionCard({ iconName, id, label, control, help, error, extra, aside }) {
+    const main = [
       h('div', { class: 'decision__head' }, [
         h('span', { class: 'decision__icon' }, icon(iconName)),
         h('label', { class: 'decision__label', for: id, text: label }),
@@ -320,8 +341,18 @@ export function renderMorning(container, { store, openWarung }) {
       extra,
       help,
       error,
+    ];
+    if (!aside) return h('article', { class: 'card decision' }, main);
+    return h('article', { class: 'card decision decision--wide' }, [
+      h('div', { class: 'decision__main' }, main),
+      h('div', { class: 'decision__aside' }, aside),
     ]);
   }
+
+  // Yesterday's arrivals against today's capacity: next to the choice that
+  // moves the line, with what the picture says in words under the control.
+  const chartSlot = h('div', { class: 'capacity' });
+  const chartNote = h('p', { class: 'decision__help' });
 
   const staffCard = decisionCard({
     iconName: 'users',
@@ -329,8 +360,9 @@ export function renderMorning(container, { store, openWarung }) {
     label: 'Pegawai',
     control: h('div', {}, [dailyStaff, shiftGrid]),
     extra: shiftSwitch,
-    help: staffHelp,
+    help: [staffHelp, chartNote],
     error: staffError,
+    aside: chartSlot,
   });
   const priceCard = decisionCard({
     iconName: 'tag',
@@ -353,8 +385,8 @@ export function renderMorning(container, { store, openWarung }) {
     id: 'seats',
     label: 'Bangku tunggu',
     control: h('div', { class: 'decision__control' }, seatsStepper.element),
-    help: seatsHelp,
     error: seatsError,
+    aside: seatsHelp,
   });
 
   // --- The shop next door ---------------------------------------------------
@@ -390,7 +422,6 @@ export function renderMorning(container, { store, openWarung }) {
       : `sudah naik ${rupiah(RENT_RISE.amount)} sejak hari ke-${RENT_RISE.fromDay}`,
   );
   const breakEvenRow = row('Titik impas');
-  const cashError = h('p', { class: 'field-error', id: 'cash-error', role: 'alert', hidden: true });
 
   const nota = h('section', { class: 'nota', 'aria-labelledby': 'nota-title' }, [
     h('h2', { class: 'nota__title', id: 'nota-title', text: 'Nota pagi' }),
@@ -401,7 +432,6 @@ export function renderMorning(container, { store, openWarung }) {
       h('hr', { class: 'nota__rule' }),
       leftRow.element,
     ]),
-    cashError,
     h('h3', { class: 'nota__subtitle', text: 'Dibayar malam ini dari hasil jualan' }),
     h('dl', { class: 'nota__rows' }, [
       wagesRow.element,
@@ -428,23 +458,19 @@ export function renderMorning(container, { store, openWarung }) {
   const paramCapacity = parameter('c·μ', 'Kapasitas');
   const paramRoom = parameter('K', 'Muat di dalam');
   const paramPatience = parameter('1/θ', 'Sabar rata-rata');
-  const chartSlot = h('div', { class: 'queue-card__chart' });
 
-  const queueCard = h('section', { class: 'card queue-card', 'aria-labelledby': 'queue-title' }, [
-    h('h2', { class: 'card__title', id: 'queue-title' }, [icon('clock'), 'Antreanmu hari ini']),
+  const queueNotes = h('details', { class: 'details details--block' }, [
+    h('summary', { text: 'Pilihanmu dalam huruf teori antrean (c, μ, K, θ)' }),
     h('p', {
-      class: 'card__lead',
+      class: 'details__lead',
       text: 'Pilihanmu di atas, ditulis dengan huruf yang dipakai teori antrean. Huruf yang sama muncul lagi di laporan malam.',
     }),
-    h('div', { class: 'queue-card__body' }, [
-      h('dl', { class: 'params' }, [
-        paramStaff.element,
-        paramRate.element,
-        paramCapacity.element,
-        paramRoom.element,
-        paramPatience.element,
-      ]),
-      chartSlot,
+    h('dl', { class: 'params' }, [
+      paramStaff.element,
+      paramRate.element,
+      paramCapacity.element,
+      paramRoom.element,
+      paramPatience.element,
     ]),
   ]);
 
@@ -504,9 +530,17 @@ export function renderMorning(container, { store, openWarung }) {
           text: 'Ini hitungan uangmu: yang dibayar pagi ini, yang dibayar malam nanti, dan berapa pelanggan yang dibutuhkan supaya balik modal.',
         },
         {
+          // In the header, which this screen does not build: found when the step is shown.
+          target: () => document.getElementById('status-reputation'),
+          title: 'Reputasi',
+          text:
+            'Ini nama baik warungmu. Naik kalau pelanggan dilayani dengan cepat; turun kalau mereka menunggu lama, batal antre, ' +
+            'tidak dapat bangku, atau kehabisan. Makin tinggi, makin banyak yang datang besok. Tekan angkanya kapan saja untuk melihat hitungannya.',
+        },
+        {
           target: cta,
           title: 'Buka warung',
-          text: 'Angka berlatar kuning ikut berubah tiap kamu mengubah pilihan. Kalau sudah mantap, buka warungnya!',
+          text: 'Kalau pilihanmu sudah mantap, buka warungnya dari sini. Sebelum itu, coba ubah-ubah dulu: angka berlatar kuning selalu ikut berubah.',
         },
       ],
       {
@@ -518,7 +552,7 @@ export function renderMorning(container, { store, openWarung }) {
       },
     );
   }
-  const guideButton = h('button', { type: 'button', class: 'bubble__action', onclick: showGuide }, [
+  const guideButton = h('button', { type: 'button', class: 'bubble__action bubble__action--aside', onclick: showGuide }, [
     icon('info'),
     h('span', { text: 'Tutorial' }),
   ]);
@@ -592,9 +626,17 @@ export function renderMorning(container, { store, openWarung }) {
       live('portion', rupiah(facts.perPortion)),
       ' per porsi, dan yang tidak terjual basi malam ini. Kasmu cukup untuk ',
       live('affordable', `${integer(facts.affordableStock)} porsi`),
+      // Fewer than yesterday because the cash ran short: said, not done in silence.
+      yesterday && draft.stock === facts.affordableStock && draft.stock < yesterday.decisions.stock
+        ? `, jadi stoknya saya turunkan dari ${integer(yesterday.decisions.stock)}`
+        : '',
       `.${memory}`,
     );
-    showFieldError(stockError, problemFor('stock'));
+    // Short of cash is said here too: this is the number that mends it.
+    showFieldError(stockError, problemFor('stock') ?? problemFor('cash'));
+    // The plus stops where the cash does. A stock that is already above it
+    // (after shopping next door) can still be brought down.
+    stockStepper.setBounds(LIMITS.stock.min, Math.max(Math.min(LIMITS.stock.max, facts.affordableStock), draft.stock, LIMITS.stock.min));
 
     // Seats
     const seatsAvailable = game.seatsOwned + draft.buy.seats;
@@ -609,6 +651,10 @@ export function renderMorning(container, { store, openWarung }) {
       draft.seats === 0
         ? 'Tanpa bangku, yang datang saat semua pegawai sibuk langsung balik kanan.'
         : `Yang kelamaan menunggu lalu batal antre merusak reputasi ${harm} kali lebih besar daripada yang balik kanan karena penuh.`,
+      // The plus button stops at the stools owned: say where more come from.
+      ...(draft.seats === seatsAvailable && seatsAvailable < LIMITS.seats.max
+        ? [' Mau lebih banyak? ', h('a', { href: '#/toko', text: `Beli bangku di ${SHOP_NAME}` }), '.']
+        : []),
     );
     showFieldError(seatsError, problemFor('seats', 'buy.seats'));
 
@@ -631,7 +677,6 @@ export function renderMorning(container, { store, openWarung }) {
     ingredientsRow.amount.textContent = rupiah(-facts.ingredients);
     leftRow.amount.textContent = rupiah(facts.cashLeft);
     leftRow.amount.className = facts.cashLeft < 0 ? 'is-loss' : '';
-    showFieldError(cashError, problemFor('cash'));
     wagesRow.term.replaceChildren(
       'Gaji',
       h('small', { text: `${integer(facts.staffHours)} jam kerja × ${rupiah(wagePerHour(facts.equipped))}` }),
@@ -640,7 +685,7 @@ export function renderMorning(container, { store, openWarung }) {
     rentRow.amount.textContent = rupiah(facts.rent);
     breakEvenRow.term.replaceChildren(
       'Titik impas',
-      h('small', { text: facts.margin > 0 ? '(gaji + sewa) ÷ untung per porsi' : 'tidak tercapai dengan harga ini' }),
+      h('small', { text: facts.margin > 0 ? '(gaji + sewa) ÷ untung seporsi' : 'tidak tercapai dengan harga ini' }),
     );
     breakEvenRow.amount.textContent = Number.isFinite(facts.breakEven)
       ? `${integer(Math.ceil(facts.breakEven))} pelanggan`
@@ -672,42 +717,49 @@ export function renderMorning(container, { store, openWarung }) {
     paramPatience.value.replaceChildren(live('p-patience', `${compact(facts.patienceMinutes)} menit`));
 
     // Yesterday against today's capacity
+    const arrivals = Array.from({ length: DAY.hours }, (_, hour) => yesterday?.results.periods[hour]?.arrivals ?? 0);
+    const legend = (className, text) => h('span', { class: 'legend__item' }, [h('span', { class: `legend__swatch ${className}` }), text]);
     if (yesterday) {
-      const arrivals = Array.from({ length: DAY.hours }, (_, hour) => yesterday.results.periods[hour]?.arrivals ?? 0);
       const busiest = arrivals.indexOf(Math.max(...arrivals));
       const capacityThen = facts.capacity[Math.floor(busiest / facts.hoursPerShift)];
       const over = arrivals[busiest] > capacityThen;
       chartSlot.replaceChildren(
-        h('h3', { class: 'queue-card__subtitle', text: 'Yang datang kemarin dan kapasitas hari ini' }),
+        h('h3', { class: 'capacity__title', text: 'Yang datang kemarin dan kapasitas hari ini' }),
         capacityChart(arrivals, facts.capacity, facts.hoursPerShift),
         h('p', { class: 'legend' }, [
-          h('span', { class: 'legend__item' }, [h('span', { class: 'legend__swatch legend__swatch--bar' }), 'datang kemarin, per jam']),
-          h('span', { class: 'legend__item' }, [h('span', { class: 'legend__swatch legend__swatch--line' }), 'kapasitas hari ini']),
+          legend('legend__swatch--bar', 'datang kemarin, per jam'),
+          legend('legend__swatch--line', 'kapasitas hari ini'),
         ]),
-        h('p', { class: 'card__note' }, [
-          `Jam teramai kemarin ${hourRange(busiest)}: ${integer(arrivals[busiest])} pelanggan datang, ` +
-            'sedangkan kapasitasmu hari ini di jam itu ',
-          live('p-then', `${compact(capacityThen)} per jam`),
-          over
-            ? '. Yang datang lebih banyak daripada yang bisa dilayani, jadi antrean akan menumpuk di jam itu.'
-            : '. Kapasitasmu masih di atas jumlah yang datang.',
-        ]),
+      );
+      chartNote.replaceChildren(
+        `Jam teramai kemarin ${hourRange(busiest)}: ${integer(arrivals[busiest])} pelanggan datang, ` +
+          'sedangkan kapasitasmu hari ini di jam itu ',
+        live('p-then', `${compact(capacityThen)} per jam`),
+        over ? '. Antrean akan menumpuk di jam itu.' : '. Kapasitasmu masih cukup.',
       );
     } else {
+      // Nobody has come yet, but today's capacity is already known.
       chartSlot.replaceChildren(
-        h('p', {
-          class: 'card__note',
-          text: 'Mulai besok, di sini tampil jumlah pelanggan yang datang tiap jam hari ini, dibandingkan dengan kapasitasmu.',
-        }),
+        h('h3', { class: 'capacity__title', text: 'Kapasitasmu hari ini, jam demi jam' }),
+        capacityChart(arrivals, facts.capacity, facts.hoursPerShift),
+        h('p', { class: 'legend' }, [legend('legend__swatch--line', 'kapasitas hari ini')]),
       );
+      chartNote.textContent =
+        'Mulai besok, batang jumlah pelanggan yang datang tiap jam ikut tampil di grafik, supaya kelihatan jam mana yang kewalahan.';
     }
 
     // Opening
     const canOpen = problems.length === 0;
     openButton.setAttribute('aria-disabled', String(!canOpen));
     blocked.hidden = canOpen;
-    blocked.textContent = canOpen ? '' : 'Masih ada yang perlu dibetulkan sebelum warung bisa dibuka.';
+    // What is wrong, in a few words, next to the button it holds back.
+    blocked.textContent = canOpen
+      ? ''
+      : problems.some((problem) => problem.field === 'cash')
+        ? `Kasnya kurang ${rupiah(-facts.cashLeft)}. Kurangi stok atau isi keranjang.`
+        : 'Masih ada yang perlu dibetulkan sebelum warung bisa dibuka.';
     ctaSummary.textContent = `Sisa kas ${rupiah(facts.cashLeft)}`;
+    ctaSummary.classList.toggle('is-loss', facts.cashLeft < 0);
 
     saveDraft(store, draft);
   }
@@ -718,16 +770,7 @@ export function renderMorning(container, { store, openWarung }) {
   const heading = h('h1', { id: 'view-title', tabindex: '-1', text: 'Siapkan warung hari ini' });
   container.append(
     h('section', { class: 'view view--pagi', 'aria-labelledby': 'view-title' }, [
-      h('header', { class: 'view__head' }, [
-        h('p', { class: 'eyebrow' }, [icon('sun'), `Hari ${game.day} dari ${DAY.count} · Pagi`]),
-        heading,
-        dayCalendar(game, { planning: true }),
-        // He greets the first morning, and carries yesterday's result on his face after that.
-        bubble(
-          [...morningWords(game), guideButton],
-          yesterday ? { mood: yesterday.ledger.profit >= 0 ? 'happy' : 'sad' } : { greet: 'wave' },
-        ),
-      ]),
+      h('header', { class: 'view__head' }, [heading, dayCalendar(game, { planning: true })]),
       news &&
         h('section', { class: 'news', 'aria-labelledby': 'news-title' }, [
           h('p', { class: 'news__kicker' }, [icon('megaphone'), 'Kabar pagi']),
@@ -737,20 +780,24 @@ export function renderMorning(container, { store, openWarung }) {
           ]),
           h('p', { class: 'news__text', text: EVENT_TEXT[news.id].morning(news) }),
         ]),
-      h('section', { 'aria-labelledby': 'decisions-title' }, [
-        h('h2', { class: 'section-title section-title--center', id: 'decisions-title', text: 'Hari ini mau gimana?' }),
-        h('p', {
-          class: 'section-lead section-lead--center',
-          text: 'Angka yang berlatar kuning ikut berubah begitu kamu mengubah pilihanmu.',
-        }),
-        // The four choices on the left, what they cost on the right.
-        h('div', { class: 'desk' }, [
-          h('div', { class: 'decisions' }, [staffCard, priceCard, stockCard, seatsCard]),
-          h('aside', { class: 'desk__side', 'aria-label': 'Ringkasan pagi' }, [nota, cta]),
+      // The desk: what he says and the four choices on the left; what they
+      // cost, and the way out, on the right, where they stay in sight.
+      h('div', { class: 'desk' }, [
+        h('div', { class: 'desk__main' }, [
+          // He greets the first morning, and carries yesterday's result on his face after that.
+          bubble(
+            [guideButton, ...morningWords(game)],
+            yesterday ? { mood: yesterday.ledger.profit >= 0 ? 'happy' : 'sad' } : { greet: 'wave' },
+          ),
+          h('section', { class: 'desk__choices', 'aria-labelledby': 'decisions-title' }, [
+            h('h2', { class: 'section-title', id: 'decisions-title', text: 'Hari ini mau gimana?' }),
+            h('div', { class: 'decisions' }, [staffCard, priceCard, stockCard, seatsCard]),
+          ]),
         ]),
+        h('aside', { class: 'desk__side', 'aria-label': 'Ringkasan pagi' }, [nota, cta]),
       ]),
       shopTeaser,
-      queueCard,
+      queueNotes,
     ]),
   );
 

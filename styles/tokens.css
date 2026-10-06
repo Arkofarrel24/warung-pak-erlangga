@@ -17,6 +17,8 @@
   --ink: #2a1b12; /*          text and outlines: sweet soy sauce */
   --ink-soft: #5e4a3b; /*     secondary text, 7.5:1 on paper */
   --line-soft: #d8c6a2; /*    quiet dividers */
+  --line-strong: #92867a; /*  an outline that carries meaning, 3.2:1 on paper */
+  --rule: rgb(42 27 18 / 0.3); /* a dashed divider on a tinted surface */
 
   /* Turmeric, sambal, banana leaf */
   --kunyit: #f2a91e;
@@ -90,6 +92,7 @@
   --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
+  --text-2xs: 0.75rem; /*   12px, only for a mark inside a small cell: a calendar day, a board column */
   --text-xs: 0.8125rem; /*  13px, labels only */
   --text-sm: 0.875rem;
   --text-md: 1rem;
@@ -109,7 +112,16 @@
   --space-7: 48px;
   --space-8: 64px;
 
+  /*
+   * Rhythm: sections of a screen stand well apart, and what belongs to one
+   * section stays close together. Two distances, so the eye can tell a new
+   * subject from the next part of the same one.
+   */
+  --gap-section: clamp(var(--space-6), 5vw, var(--space-7));
+  --gap-group: var(--space-5);
+
   /* Shape */
+  --radius-xs: 6px; /*  small marks inside a line of text: a highlight, a stamp */
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 24px;
@@ -123,11 +135,22 @@
   --lip-lg: 0 6px 0;
   --lip-color: rgb(42 27 18 / 0.22);
 
-  /* Motion */
+  /*
+   * Motion. Things that arrive or answer a press start fast and settle
+   * (--ease-out); things that travel across the screen ease at both ends
+   * (--ease-in-out); the rolling door moves like something heavy on a rail
+   * (--ease-door). What is pressed answers within --dur-press, and nothing
+   * that is seen many times a day takes longer than --dur-enter.
+   */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-door: cubic-bezier(0.32, 0.72, 0, 1);
   --dur-press: 90ms;
   --dur-fast: 160ms;
+  --dur-enter: 240ms;
   --dur-view: 280ms;
+  /* One step of a stagger: each next thing starts this much later. */
+  --stagger: 45ms;
 
   /* Stacking order */
   --z-sticky: 20;

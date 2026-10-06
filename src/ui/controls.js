@@ -2,7 +2,7 @@
 
 import { h, icon } from './dom.js';
 import { integer } from './format.js';
-import { pop } from './motion.js';
+import { roll } from './motion.js';
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -91,13 +91,14 @@ export function createStepper({
     increase.disabled = current >= upper;
   }
 
-  function commit(next) {
+  /** @param {boolean} [shown] the change is acted out; not for the keyboard, where it would only slow the keys down */
+  function commit(next, shown = false) {
     const snapped = clamp(Math.round(next / snap) * snap, lower, upper);
-    const changed = snapped !== current;
+    const direction = Math.sign(snapped - current);
     current = snapped;
     render();
-    if (changed) {
-      pop(input);
+    if (direction !== 0) {
+      if (shown) roll(input, direction);
       onChange(current);
     }
   }
@@ -109,8 +110,9 @@ export function createStepper({
     else commit(Number(digits));
   }
 
-  decrease.addEventListener('click', () => commit(current - step));
-  increase.addEventListener('click', () => commit(current + step));
+  // A click made with the keyboard (detail 0) is not acted out either.
+  decrease.addEventListener('click', (event) => commit(current - step, event.detail > 0));
+  increase.addEventListener('click', (event) => commit(current + step, event.detail > 0));
   input.addEventListener('blur', commitTyped);
   input.addEventListener('input', fit);
   input.addEventListener('focus', () => input.select());
@@ -191,17 +193,57 @@ export function createTabs({ label, tabs, selected, onSelect }) {
   const panels = tabs.map((tab) =>
     h('div', { class: 'tabs__panel', role: 'tabpanel', id: `panel-${tab.id}`, 'aria-labelledby': `tab-${tab.id}`, tabindex: '0' }, tab.panel),
   );
-  const list = h('div', { class: 'tabs', role: 'tablist', 'aria-label': label }, buttons);
+  // The pill under the chosen tab: an ink layer and a turmeric layer inside
+  // it, both as large as the bar and both cut down to the tab with clip-path.
+  const ink = h('span', { class: 'tabs__ink', 'aria-hidden': 'true' });
+  const fill = h('span', { class: 'tabs__fill', 'aria-hidden': 'true' });
+  const list = h('div', { class: 'tabs' }, [
+    ink,
+    fill,
+    h('div', { class: 'tabs__list', role: 'tablist', 'aria-label': label }, buttons),
+  ]);
+  let chosen = 0;
 
-  function select(id, { focus = false } = {}) {
+  /**
+   * Cuts the two layers down to the chosen tab. With `instant` the pill is
+   * simply there: the first time, when the bar changes size, and when the
+   * tab was chosen with the keyboard.
+   */
+  function placePill(instant) {
+    const button = buttons[chosen];
+    const width = list.clientWidth;
+    const height = list.clientHeight;
+    if (width === 0) return; // not on the page yet
+    const left = button.offsetLeft + button.parentElement.offsetLeft;
+    const top = button.offsetTop + button.parentElement.offsetTop;
+    const right = width - left - button.offsetWidth;
+    const bottom = height - top - button.offsetHeight;
+    const radius = parseFloat(getComputedStyle(button).borderTopLeftRadius) || 0;
+    const line = 2;
+    if (instant) list.dataset.instant = '';
+    // The ink reaches a little lower than the turmeric: the lip under a pressed-in button.
+    ink.style.clipPath = `inset(${top}px ${right}px ${Math.max(bottom - line, 0)}px ${left}px round ${radius}px)`;
+    fill.style.clipPath = `inset(${top + line}px ${right + line}px ${bottom + line}px ${left + line}px round ${Math.max(radius - line, 0)}px)`;
+    if (instant) {
+      // Let the browser take the new shape before transitions are allowed again.
+      void ink.offsetWidth;
+      delete list.dataset.instant;
+    }
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(() => placePill(true)).observe(list);
+
+  function select(id, { focus = false, instant = false } = {}) {
     const index = Math.max(tabs.findIndex((tab) => tab.id === id), 0);
+    chosen = index;
     buttons.forEach((button, i) => {
       button.setAttribute('aria-selected', String(i === index));
       button.tabIndex = i === index ? 0 : -1;
     });
     panels.forEach((panel, i) => {
       panel.hidden = i !== index;
+      panel.toggleAttribute('data-instant', instant);
     });
+    placePill(instant);
     if (focus) buttons[index].focus();
     onSelect?.(tabs[index].id);
   }
@@ -217,12 +259,44 @@ export function createTabs({ label, tabs, selected, onSelect }) {
       };
       if (!(event.key in moves)) return;
       event.preventDefault();
-      select(tabs[moves[event.key]].id, { focus: true });
+      // Arrow keys are pressed in quick succession; nothing is animated for them.
+      select(tabs[moves[event.key]].id, { focus: true, instant: true });
     });
   });
 
   select(selected ?? tabs[0].id);
   return { list, panels, select };
+}
+
+/**
+ * Explains something in a modal dialog, with one button to close it. Like
+ * every native <dialog> it also closes on Escape, and the focus goes back to
+ * whatever opened it.
+ *
+ * @param {object} options
+ * @param {string} options.title
+ * @param {Node | Node[]} options.body
+ * @param {string} [options.closeLabel]
+ * @param {Element} [options.opener] what opened it, if that is not where the focus is
+ *   (a button that was clicked does not take the focus in every browser)
+ */
+export function infoDialog({ title, body, closeLabel = 'Mengerti', opener = document.activeElement }) {
+  const heading = h('h2', { id: 'info-title', tabindex: '-1', text: title });
+  const close = h('button', { type: 'button', class: 'btn btn--primary', text: closeLabel });
+  const dialog = h('dialog', { class: 'dialog dialog--wide', 'aria-labelledby': 'info-title' }, [
+    heading,
+    body,
+    h('div', { class: 'dialog__actions' }, close),
+  ]);
+  close.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => {
+    dialog.remove();
+    if (opener?.isConnected) opener.focus({ preventScroll: true });
+  });
+  document.body.append(dialog);
+  dialog.showModal();
+  // Reading starts at the top, not at the button under the text.
+  heading.focus({ preventScroll: true });
 }
 
 /**
@@ -245,6 +319,8 @@ export function confirmDialog({ title, body, confirmLabel, cancelLabel = 'Batal'
       h('div', { class: 'dialog__actions' }, [cancel, confirm]),
     ]);
 
+    // Whatever opened the dialog gets the focus back when it is dismissed.
+    const opener = document.activeElement;
     let confirmed = false;
     cancel.addEventListener('click', () => dialog.close());
     confirm.addEventListener('click', () => {
@@ -253,6 +329,7 @@ export function confirmDialog({ title, body, confirmLabel, cancelLabel = 'Batal'
     });
     dialog.addEventListener('close', () => {
       dialog.remove();
+      if (!confirmed && opener?.isConnected) opener.focus({ preventScroll: true });
       resolve(confirmed);
     });
 

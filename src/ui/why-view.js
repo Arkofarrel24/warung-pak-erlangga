@@ -127,7 +127,7 @@ export function dayFindings(report) {
   return explainDay(report).map((finding) => ({ ...finding, ...WORDS[finding.id](finding) }));
 }
 
-/** The whole explanation: one card per finding, the costliest first. */
+/** The whole explanation: one entry per finding, the costliest first. */
 export function whyPanel(report) {
   const findings = dayFindings(report);
   return h('section', { class: 'why', 'aria-labelledby': 'why-title' }, [
@@ -142,14 +142,15 @@ export function whyPanel(report) {
       'ol',
       { class: 'why__list' },
       findings.map((finding) =>
-        h('li', { class: 'card why__item' }, [
+        h('li', { class: 'why__item' }, [
           h('span', { class: 'why__icon' }, icon(finding.icon)),
           h('div', { class: 'why__body' }, [
+            // What happened, in plain words, comes first; its name in queueing theory follows.
+            h('h3', { text: finding.title }),
             h('p', { class: 'why__concept' }, [
               finding.symbol && h('span', { class: 'chip chip--param', text: finding.symbol }),
               finding.concept,
             ]),
-            h('h3', { text: finding.title }),
             h('p', { text: finding.text }),
             h('p', { class: 'why__advice' }, [h('strong', { text: 'Yang bisa dicoba: ' }), finding.advice]),
           ]),
@@ -174,7 +175,7 @@ export function whyTeaser(report, onMore) {
   const profit = report.ledger.profit >= 0;
   const words = main
     ? `${profit ? 'Hari ini untung, tapi masih ada yang bocor' : 'Hari ini rugi, dan ini penyebab terbesarnya'}: ${main.short} ` +
-      `Nilainya sekitar ${rupiah(main.cost)}.`
+      `Nilainya ${rupiah(main.cost)}.`
     : 'Hari ini tidak ada pelanggan yang lepas dan tidak ada masakan yang terbuang. Rapi sekali!';
   return bubble([h('p', { text: words }), more], { mood: profit ? 'happy' : 'sad' });
 }

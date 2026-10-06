@@ -13,7 +13,7 @@ import { EVENT_KIND } from '../game/events.js';
 import { ARRIVAL_OUTCOME, EVENT } from '../sim/engine.js';
 import { h, icon } from './dom.js';
 import { clock as clockText, compact, decimal, integer, rupiah } from './format.js';
-import { pop, prefersReducedMotion } from './motion.js';
+import { flash, pop, prefersReducedMotion } from './motion.js';
 import { avatar, gesture } from './pak-erlangga.js';
 import { PHASE, phaseAt, phaseName, setPhase } from './phase.js';
 import { createScenePlayer } from './scene-player.js';
@@ -49,6 +49,13 @@ const REMARKS = Object.freeze({
   helper: ['cheer', ['Keponakan saya datang!']],
 });
 
+/** The wash of color over a count on the board when a customer is lost that way. */
+const LOSS_TINT = Object.freeze({
+  reneged: 'rgb(213 94 0 / 0.55)',
+  rejected: 'rgb(230 159 0 / 0.5)',
+  soldOut: 'rgb(107 124 147 / 0.6)',
+});
+
 /** What is heard when the engine processes an event, if anything. */
 function soundOf(record) {
   if (record.type === EVENT.DEPARTURE) return 'sale';
@@ -70,7 +77,6 @@ function revealTime(event) {
 }
 
 export function renderDay(container, { store, activeDay, completeDay }) {
-  const { game } = store;
   const { simulation, decisions, model, event } = activeDay;
   const maxServers = model.servers ?? Math.max(...model.staffSchedule.map((entry) => entry.servers));
   const reducedMotion = prefersReducedMotion();
@@ -88,9 +94,10 @@ export function renderDay(container, { store, activeDay, completeDay }) {
   // He stands in the corner of the scene and reacts to what he sees. It is
   // commentary only: everything he remarks on is also in the counts below.
   const host = avatar();
-  const hostSays = h('span', { class: 'stage__say', hidden: true });
+  const hostSays = h('span', { class: 'stage__say', 'data-shown': 'false' });
   const hostCorner = h('div', { class: 'stage__host', 'aria-hidden': 'true' }, [host, hostSays]);
   let lastRemark = -Infinity;
+  let lastLoss = -Infinity;
   let remarkTimer = null;
   let sales = 0;
 
@@ -102,19 +109,33 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     const [how, lines] = REMARKS[about];
     gesture(host, how);
     hostSays.textContent = pick(lines, hostSays.textContent);
-    hostSays.hidden = false;
-    pop(hostSays);
+    // The bubble grows out of him and shrinks back; a new remark simply takes over the old one.
+    hostSays.dataset.shown = 'true';
     window.clearTimeout(remarkTimer);
     remarkTimer = window.setTimeout(() => {
-      hostSays.hidden = true;
+      hostSays.dataset.shown = 'false';
     }, REMARK_SHOWN_MS);
   }
 
   /** What he makes of one event of the simulation. */
   function watch(record) {
+    const lost =
+      record.type === EVENT.RENEGE ||
+      record.type === EVENT.SOLD_OUT ||
+      (record.type === EVENT.ARRIVAL && record.outcome !== ARRIVAL_OUTCOME.SERVED && record.outcome !== ARRIVAL_OUTCOME.QUEUED);
+    if (lost) {
+      lastLoss = performance.now();
+      // The count that has just gone up lights for a moment, in the color of
+      // that ending: what happened in the scene and where it is counted. Not
+      // at four times the speed, where it would never stop flickering.
+      const which =
+        record.type === EVENT.RENEGE ? 'reneged' : record.outcome === ARRIVAL_OUTCOME.REJECTED ? 'rejected' : 'soldOut';
+      if (player.pace < 4) flash(tallies[which].element, LOSS_TINT[which]);
+    }
     if (record.type === EVENT.DEPARTURE) {
       sales += 1;
-      if (sales % SALES_PER_CLAP === 0) remark('sales');
+      // He does not cheer while somebody is still walking off unserved.
+      if (sales % SALES_PER_CLAP === 0 && performance.now() - lastLoss > REMARK_GAP_MS) remark('sales');
     } else if (record.type === EVENT.RENEGE) remark('renege');
     else if (record.type === EVENT.BATCH_ARRIVAL) remark('group', true);
     else if (record.type === EVENT.CLOSE) remark('close', true);
@@ -127,8 +148,10 @@ export function renderDay(container, { store, activeDay, completeDay }) {
 
   const playLabel = h('span');
   const playButton = h('button', { type: 'button', class: 'btn' }, [playLabel]);
+  // The speed chosen yesterday is the speed today starts at.
+  const startPace = PACES.includes(store.prefs.pace) ? store.prefs.pace : 1;
   const paceInputs = PACES.map((pace) =>
-    h('input', { type: 'radio', name: 'pace', id: `pace-${pace}`, value: pace, class: 'segmented__input', checked: pace === 1 }),
+    h('input', { type: 'radio', name: 'pace', id: `pace-${pace}`, value: pace, class: 'segmented__input', checked: pace === startPace }),
   );
   const paceLabel = (pace) => `${decimal(pace, pace < 1 ? 1 : 0)}×`;
   const paceControl = h('fieldset', { class: 'segmented' }, [
@@ -139,18 +162,25 @@ export function renderDay(container, { store, activeDay, completeDay }) {
 
   // --- Running totals -------------------------------------------------------
 
-  const tally = (key, label, note) => {
-    const value = h('dd', { class: 'num', text: '0' });
-    return { element: h('div', { class: `tally__item tally__item--${key}` }, [h('dt', {}, [h('span', { class: 'tally__dot', 'aria-hidden': 'true' }), label]), value, note && h('small', { text: note })]), value };
+  // Chalked on a board under the scene, so the counts and what they count are seen together.
+  const tally = (key, label, outOf) => {
+    const value = h('span', { text: '0' });
+    return {
+      element: h('div', { class: `tally__item tally__item--${key}` }, [
+        h('dt', {}, [h('span', { class: 'tally__dot', 'aria-hidden': 'true' }), label]),
+        h('dd', { class: 'num' }, [value, outOf && h('span', { class: 'tally__of', text: `/${outOf}` })]),
+      ]),
+      value,
+    };
   };
   const tallies = {
-    arrivals: tally('arrivals', 'Datang', 'pelanggan'),
-    served: tally('served', 'Dilayani', 'porsi terjual'),
-    reneged: tally('reneged', 'Batal antre', 'habis sabar'),
-    rejected: tally('balked', 'Penuh', 'tak dapat bangku'),
-    soldOut: tally('soldout', 'Kehabisan', 'stok habis'),
-    stock: tally('stock', 'Sisa stok', `dari ${integer(decisions.stock)} porsi`),
-    revenue: tally('revenue', 'Uang masuk', 'hari ini'),
+    arrivals: tally('arrivals', 'Datang'),
+    served: tally('served', 'Dilayani'),
+    reneged: tally('reneged', 'Batal antre'),
+    rejected: tally('balked', 'Penuh'),
+    soldOut: tally('soldout', 'Kehabisan'),
+    stock: tally('stock', 'Sisa stok', integer(decisions.stock)),
+    revenue: tally('revenue', 'Uang masuk'),
   };
 
   const scene = new WarungScene(canvas, {
@@ -257,7 +287,9 @@ export function renderDay(container, { store, activeDay, completeDay }) {
   });
   paceInputs.forEach((input) =>
     input.addEventListener('change', () => {
-      if (input.checked) player.setPace(Number(input.value));
+      if (!input.checked) return;
+      player.setPace(Number(input.value));
+      store.setPrefs({ pace: Number(input.value) });
     }),
   );
   skipButton.addEventListener('click', () => {
@@ -279,16 +311,16 @@ export function renderDay(container, { store, activeDay, completeDay }) {
 
   container.append(
     h('section', { class: 'view view--siang', 'aria-labelledby': 'view-title' }, [
-      h('header', { class: 'view__head' }, [
-        h('p', { class: 'eyebrow' }, [icon('shop'), `Hari ${game.day} dari ${DAY.count} · Siang`]),
-        heading,
-      ]),
+      h('header', { class: 'view__head' }, heading),
       h('div', { class: 'stage stage--day' }, [
         h('div', { class: 'stage__top' }, [
           h('div', { class: 'stage__time' }, [h('span', { class: 'sr-only', text: 'Jam ' }), clockValue, phase]),
           h('div', { class: 'stage__progress', 'aria-hidden': 'true' }, progress),
         ]),
-        h('div', { class: 'stage__frame' }, [canvas, hostCorner, closedNote]),
+        h('div', { class: 'stage__frame' }, [
+          h('div', { class: 'stage__view' }, [canvas, hostCorner, closedNote]),
+          h('dl', { class: 'tally', 'aria-label': 'Hitungan sejauh ini' }, Object.values(tallies).map((item) => item.element)),
+        ]),
         h('div', { class: 'stage__controls' }, [playButton, paceControl, skipButton]),
         h('p', { class: 'legend legend--center' }, [
           legendItem('legend__swatch--patience', 'batang di atas kepala: sisa kesabaran'),
@@ -303,12 +335,12 @@ export function renderDay(container, { store, activeDay, completeDay }) {
           icon('info'),
           'Animasi dijeda karena perangkatmu diatur untuk mengurangi gerakan. Tekan Putar untuk menontonnya, atau langsung buka laporannya.',
         ]),
-      h('dl', { class: 'tally', 'aria-label': 'Hitungan sejauh ini' }, Object.values(tallies).map((item) => item.element)),
     ]),
   );
 
   observer.observe(canvas);
   scene.resize();
+  player.setPace(startPace);
   player.start();
   if (!reducedMotion && !simulation.finished) player.play();
   renderPlayButton();

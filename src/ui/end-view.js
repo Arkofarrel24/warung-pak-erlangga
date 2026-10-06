@@ -109,6 +109,7 @@ export function renderEnd(container, { store, startNewGame }) {
   const served = total(history, (report) => report.results.served);
   const reneged = total(history, (report) => report.results.reneged);
   const profit = total(history, (report) => report.ledger.profit);
+  const spent = total(history, (report) => report.ledger.purchases ?? 0);
   const best = history.reduce((top, report) => (report.ledger.profit > top.ledger.profit ? report : top), history[0]);
 
   let words;
@@ -131,16 +132,22 @@ export function renderEnd(container, { store, startNewGame }) {
   container.append(
     h('section', { class: 'view view--akhir', 'aria-labelledby': 'view-title' }, [
       h('header', { class: 'view__head' }, [
-        h('p', { class: 'eyebrow' }, [icon(won ? 'star' : 'alert'), won ? `Selesai: ${DAY.count} hari` : `Berhenti di hari ke-${game.day}`]),
         heading,
-        dayCalendar(game),
         bubble(h('p', { text: words }), { mood: earned >= 2 ? 'happy' : won ? undefined : 'sad', greet: earned >= 2 ? 'cheer' : 'talk' }),
       ]),
+      // The certificate is what the game ends on; the days behind it follow.
       certificate(store, {
         earned,
         fresh,
         facts: [
-          ['Kas akhir', rupiah(game.cash), `modal awal ${rupiah(START.cash)}`],
+          // Cash at the end = the starting capital + net profit - what was spent next door.
+          [
+            'Kas akhir',
+            rupiah(game.cash),
+            spent > 0
+              ? `modal ${rupiah(START.cash)} + laba − belanja toko ${rupiah(spent)}`
+              : `modal awal ${rupiah(START.cash)}`,
+          ],
           ['Laba bersih', signedRupiah(profit), `hari terbaik: hari ke-${best.day}, ${signedRupiah(best.ledger.profit)}`],
           ['Reputasi', decimal(game.reputation, 0), 'dari 100, mulai dari 50'],
           [
@@ -150,9 +157,12 @@ export function renderEnd(container, { store, startNewGame }) {
           ],
         ],
       }),
+      dayCalendar(game),
       trendsCard(history, charts),
       h('div', { class: 'report__next' }, [
         h('a', { class: 'btn', href: `#/laporan/${history.length}` }, [icon('book'), 'Buka laporan hari terakhir']),
+        // On paper, or as a PDF, the page is the certificate alone (see the print rules in app.css).
+        h('button', { type: 'button', class: 'btn', onclick: () => window.print() }, [icon('book'), 'Cetak atau simpan piagam']),
         h('button', { type: 'button', class: 'btn btn--primary', onclick: () => startNewGame({ confirm: false }) }, [
           icon('refresh'),
           'Main lagi',

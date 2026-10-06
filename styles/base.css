@@ -102,6 +102,23 @@ svg {
   display: block;
 }
 
+/* What the browser draws itself takes the colors of the warung too. */
+::selection {
+  background: var(--kunyit);
+  color: var(--ink);
+}
+
+:root {
+  accent-color: var(--bata);
+  caret-color: var(--bata);
+  scrollbar-color: var(--kunyit-deep) var(--paper-deep);
+}
+
+a {
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.18em;
+}
+
 [hidden] {
   display: none !important;
 }
@@ -111,7 +128,7 @@ svg {
 :focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 /* A heading focused by the router: visible to assistive technology only. */
@@ -168,17 +185,6 @@ svg {
   letter-spacing: -0.01em;
 }
 
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
 .muted {
   color: var(--ink-soft);
 }
@@ -202,7 +208,10 @@ svg {
   border-color: var(--daun-text);
 }
 
+/* Every symbol takes the same width, so the words after them start on one line. */
 .chip--param {
+  justify-content: center;
+  min-width: 3.4em;
   background: var(--biru-soft);
   border-color: var(--biru);
   color: #174a68;
@@ -226,22 +235,29 @@ svg {
   font-weight: 800;
   text-decoration: none;
   cursor: pointer;
-  /* Let go, a button springs back a little past where it was. */
+  white-space: nowrap;
+  /* Let go, a button comes back up quickly and settles; it does not bounce. */
   transition:
-    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow var(--dur-press) ease-out,
-    background-color var(--dur-fast) ease-out;
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) ease;
 }
 
-.btn:hover {
-  background: var(--kunyit-soft);
-  transform: translateY(-1px);
-  box-shadow: 0 5px 0 var(--ink);
+/* Only where there is a pointer that hovers: a finger would leave the button lifted. */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    background: var(--kunyit-soft);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 0 var(--ink);
+  }
 }
 
-/* Pressing pushes the button down onto its lip. Transform does not move the layout. */
+/*
+ * Pressing pushes the button down onto its lip, at once; the way down is
+ * quicker than the way back up. Transform does not move the layout.
+ */
 .btn:active {
-  transform: translateY(3px);
+  transform: translateY(3px) scale(0.985);
   box-shadow: 0 1px 0 var(--ink);
   transition-duration: var(--dur-press);
 }
@@ -252,8 +268,10 @@ svg {
   padding: var(--space-3) var(--space-6);
 }
 
-.btn--primary:hover {
-  background: #ffbb38;
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover {
+    background: #ffbb38;
+  }
 }
 
 .btn--quiet {
@@ -264,8 +282,10 @@ svg {
   padding-inline: var(--space-3);
 }
 
-.btn--quiet:hover {
-  background: var(--paper-deep);
+@media (hover: hover) and (pointer: fine) {
+  .btn--quiet:hover {
+    background: var(--paper-deep);
+  }
 }
 
 .btn--quiet:active,
@@ -280,8 +300,10 @@ svg {
   color: #fff;
 }
 
-.btn--danger:hover {
-  background: #d93a24;
+@media (hover: hover) and (pointer: fine) {
+  .btn--danger:hover {
+    background: #d93a24;
+  }
 }
 
 .btn--block {
@@ -353,8 +375,10 @@ svg {
   transition: background-color var(--dur-fast) ease-out;
 }
 
-.stepper__btn:hover:not(:disabled) {
-  background: var(--kunyit);
+@media (hover: hover) and (pointer: fine) {
+  .stepper__btn:hover:not(:disabled) {
+    background: var(--kunyit);
+  }
 }
 
 .stepper__btn:active:not(:disabled) {
@@ -362,13 +386,31 @@ svg {
   color: #fff;
 }
 
+/* The plus or minus gives a little under the finger. */
+.stepper__btn .icon {
+  transition: transform var(--dur-press) var(--ease-out);
+}
+
+.stepper__btn:active:not(:disabled) .icon {
+  transform: scale(0.8);
+}
+
 .stepper__btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.stepper__btn:focus-visible,
+.stepper__btn:focus-visible {
+  outline-offset: -3px;
+}
+
+/* The ring goes round the whole field, not round the one or two digits in it. */
 .stepper__input:focus-visible {
+  outline: none;
+}
+
+.stepper__field:has(.stepper__input:focus-visible) {
+  outline: 3px solid var(--focus);
   outline-offset: -3px;
 }
 
@@ -376,7 +418,7 @@ svg {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   padding-inline: var(--space-2);
   border-inline: var(--border) solid var(--ink);
   min-width: 0;
@@ -1023,13 +1065,16 @@ svg {
   }
 }
 
+/* His words come out of his mouth: the bubble grows from the corner that points at him. */
 .bubble__text {
   position: relative;
+  transform-origin: 0 var(--space-5);
+  animation: bubble-in var(--dur-enter) var(--ease-out) both;
   padding: var(--space-3) var(--space-4);
   background: var(--surface);
   border: var(--border) solid var(--ink);
   border-radius: var(--radius-md);
-  border-top-left-radius: 4px;
+  border-top-left-radius: var(--radius-xs);
   max-width: 62ch;
 }
 
@@ -1062,8 +1107,23 @@ svg {
   transition: background-color var(--dur-fast) ease-out;
 }
 
-.bubble__action:hover {
-  background: var(--biru-soft);
+@media (hover: hover) and (pointer: fine) {
+  .bubble__action:hover {
+    background: var(--biru-soft);
+  }
+}
+
+/* An action that goes with him, not with what he has just said: in the corner, level with his name. */
+.bubble__action--aside {
+  position: absolute;
+  top: 0;
+  right: var(--space-2);
+  margin: 0;
+}
+
+.bubble__text:has(> .bubble__action--aside) .bubble__name {
+  min-height: 32px;
+  padding-right: 7.5em;
 }
 
 /* --- Dialog --------------------------------------------------------------- */
@@ -1078,8 +1138,34 @@ svg {
   box-shadow: var(--lip-lg) var(--ink);
 }
 
+/* The same dimming as the guided tour: the ink of the page, thinned. */
 .dialog::backdrop {
-  background: rgb(31 51 39 / 0.72);
+  background: rgb(42 27 18 / 0.62);
+}
+
+/*
+ * It arrives from just below full size, in the middle of the window where
+ * it stays. Closing takes no time: the answer has been given.
+ */
+.dialog[open] {
+  transition:
+    opacity var(--dur-enter) var(--ease-out),
+    transform var(--dur-enter) var(--ease-out);
+}
+
+.dialog[open]::backdrop {
+  transition: opacity var(--dur-enter) ease;
+}
+
+@starting-style {
+  .dialog[open] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+
+  .dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 .dialog h2 {
@@ -1113,6 +1199,13 @@ svg {
   from {
     opacity: 0;
     transform: translateY(14px);
+  }
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
   }
 }
 

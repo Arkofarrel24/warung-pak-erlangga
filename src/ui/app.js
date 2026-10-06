@@ -25,6 +25,7 @@ import { countUp } from './motion.js';
 import { renderMorning } from './morning-view.js';
 import { PHASE, setPhase } from './phase.js';
 import { renderReport } from './report-view.js';
+import { showReputationGuide } from './reputation-guide.js';
 import { renderShop } from './shop-view.js';
 import { rollShutter } from './shutter.js';
 import { play, setSoundEnabled, soundEnabled, unlockSound } from './sound.js';
@@ -102,7 +103,7 @@ async function startNewGame({ confirm }) {
   if (confirm) {
     const inProgress = store.game.status === STATUS.PLAYING;
     const agreed = await confirmDialog({
-      title: 'Mulai dari awal?',
+      title: 'Mulai ulang dari awal?',
       body: inProgress
         ? `Permainan yang sedang berjalan (hari ke-${store.game.day}) akan dihapus dan tidak bisa dikembalikan.`
         : 'Hasil dan laporan permainan terakhir akan dihapus dan tidak bisa dikembalikan.',
@@ -170,7 +171,10 @@ function soundToggle() {
   return button;
 }
 
-function renderHeader() {
+/** The screens on which the morning's cash is still to be spent: the figure is this morning's, not what is left. */
+const BEFORE_CLOSING = new Set(['morning', 'shop', 'day']);
+
+function renderHeader(view) {
   const { game } = store;
   statusBar.replaceChildren();
   navigation.replaceChildren(soundToggle());
@@ -185,17 +189,31 @@ function renderHeader() {
       h('dt', {}, [icon(iconName), h('span', { text: label })]),
       h('dd', { class: 'num', text: value }),
     ]);
-  const cash = item('wallet', 'Kas', shortRupiah(game.cash), rupiah(game.cash));
+  // Until the day's books are closed the header shows the cash the morning
+  // began with, and says so; what is left after shopping is on the receipt.
+  const cash = item('wallet', BEFORE_CLOSING.has(view) ? 'Kas pagi' : 'Kas', shortRupiah(game.cash), rupiah(game.cash));
   cash.id = 'status-cash';
   const day = item('sun', 'Hari', `${game.day}/${DAY.count}`);
   // The moon takes the sun's place when the header turns to night (see .status__moon).
   day.querySelector('.icon').classList.add('status__sun');
   day.querySelector('dt').prepend(icon('moon', 'icon status__moon'));
-  statusBar.append(
-    day,
-    cash,
-    item('star', 'Reputasi', decimal(game.reputation, 0)),
+  // The reputation is the figure players ask about most, so it answers: the
+  // number is a button that opens the explanation of what moves it. The
+  // button reaches over the whole chip (see .status__ask in app.css).
+  const reputation = item('star', 'Reputasi', '');
+  reputation.id = 'status-reputation';
+  reputation.classList.add('status__item--asks');
+  reputation.querySelector('dt').append(icon('info', 'icon status__hint'));
+  reputation.querySelector('dd').append(
+    h('button', {
+      type: 'button',
+      class: 'status__ask',
+      'aria-label': `${decimal(game.reputation, 0)}, apa yang memengaruhi reputasi?`,
+      text: decimal(game.reputation, 0),
+      onclick: showReputationGuide,
+    }),
   );
+  statusBar.append(day, cash, reputation);
   // After a day the cash counts up (or down) to its new amount.
   if (shownCash !== null && shownCash !== game.cash) {
     // It waits for the coins of the day's result to reach it (see report-view.js).
@@ -257,7 +275,7 @@ function render() {
   else if (route.view === 'report') currentView = renderReport(main, context, route.day);
   else currentView = renderEnd(main, context);
 
-  renderHeader();
+  renderHeader(route.view);
   document.title = TITLES[route.view](route);
   // A day in progress is not somewhere to come back to after a reload.
   if (route.view !== 'day') store.remember({ route: route.hash });

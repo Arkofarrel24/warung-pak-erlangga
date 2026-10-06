@@ -8,7 +8,7 @@
  * itself uses.
  */
 
-import { DAY, LIMITS, SEAT_COST, TRAINING, UPGRADES } from '../game/config.js';
+import { LIMITS, SEAT_COST, TRAINING, UPGRADES } from '../game/config.js';
 import { wagePerHour } from '../game/day.js';
 import { createStepper } from './controls.js';
 import { h, icon } from './dom.js';
@@ -58,7 +58,7 @@ export function renderShop(container, { store }) {
       h('div', { class: 'wallet__figure' }, [h('dt', {}, [icon('wallet'), 'Kas pagi ini']), wallet.cash]),
       h('div', { class: 'wallet__figure' }, [h('dt', {}, [icon('basket'), 'Keranjang']), wallet.basket]),
       h('div', { class: 'wallet__figure' }, [stockLabel, wallet.stock]),
-      h('div', { class: 'wallet__figure wallet__figure--left' }, [h('dt', { text: 'Sisa kas' }), wallet.left]),
+      h('div', { class: 'wallet__figure wallet__figure--left' }, [h('dt', {}, [icon('tag'), 'Sisa kas']), wallet.left]),
     ]),
   ]);
 
@@ -87,7 +87,8 @@ export function renderShop(container, { store }) {
       ribbon,
       h('div', { class: 'ware__top' }, [
         h('span', { class: 'ware__icon' }, icon(text.icon)),
-        h('span', { class: 'ware__price num' }, owned ? ownedLabel : rupiah(cost)),
+        // Paid for on an earlier day: the tag says so, the line under the card says what it is.
+        h('span', { class: 'ware__price num' }, owned ? 'Lunas' : rupiah(cost)),
       ]),
       h('h2', { class: 'ware__name', text: text.name }),
       extra,
@@ -130,12 +131,13 @@ export function renderShop(container, { store }) {
     return card;
   }
 
+  // The arrow never ends a line: it stays with what comes after it. The unit is kept in one piece.
   const beforeAfter = (key, label, before, after, unit = '') => [
     `${label}: `,
     h('span', { class: 'ware__before', text: before }),
-    ' → ',
-    live(key, after),
-    unit && ` ${unit}`,
+    ' ',
+    h('span', { class: 'ware__pair' }, ['→ ', live(key, after)]),
+    unit && ` ${unit.replaceAll(' ', '\u00a0')}`,
   ];
 
   // Stools: bought by the piece.
@@ -173,8 +175,11 @@ export function renderShop(container, { store }) {
   ]);
   shelf.push((facts) => {
     const bought = draft.buy.seats;
+    // With nothing in the basket there is no change to show, only what is owned.
     seatChange.replaceChildren(
-      ...beforeAfter('seats', 'Bangku milikmu', integer(game.seatsOwned), integer(game.seatsOwned + bought)),
+      ...(bought > 0
+        ? beforeAfter('seats', 'Bangku milikmu', integer(game.seatsOwned), integer(game.seatsOwned + bought))
+        : [`Bangku milikmu: ${integer(game.seatsOwned)}`]),
     );
     seatCard.classList.toggle('ware--chosen', bought > 0);
     seatRibbon.hidden = bought === 0;
@@ -315,7 +320,6 @@ export function renderShop(container, { store }) {
   container.append(
     h('section', { class: 'view view--toko', 'aria-labelledby': 'view-title' }, [
       h('header', { class: 'view__head' }, [
-        h('p', { class: 'eyebrow' }, [icon('basket'), `Hari ${game.day} dari ${DAY.count} · Pagi`]),
         heading,
         h('p', { class: 'toko__tagline', text: 'Serba ada buat warung. Harga pas, tidak bisa ditawar.' }),
         speech,

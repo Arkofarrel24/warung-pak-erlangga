@@ -238,7 +238,7 @@ function createLineChart(canvas, values, { color, min, max, suggestedMax, unit, 
           backgroundColor: colors[color],
           borderWidth: 3,
           pointStyle,
-          pointRadius: pointStyle === 'star' ? 6 : 5,
+          pointRadius: 5,
           pointBorderColor: colors.ink,
           pointBorderWidth: 1.5,
           tension: 0.25,
@@ -256,7 +256,7 @@ export function createReputationChart(canvas, reputations) {
     min: 0,
     max: 100,
     format: (value) => decimal(value, 0),
-    pointStyle: 'star',
+    pointStyle: 'circle',
   });
 }
 

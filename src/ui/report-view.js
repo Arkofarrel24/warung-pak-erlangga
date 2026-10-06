@@ -122,13 +122,17 @@ function resultHero(report, game, fresh) {
       h('dd', {}, [h('span', { class: 'num', text: value }), note && h('small', { text: note })]),
     ]);
 
-  // The amount counts up from zero, like a till being totalled.
-  const amount = h('p', { class: 'hero-result__amount num', 'aria-label': rupiah(Math.abs(ledger.profit)) });
-  countUp(amount, Math.abs(ledger.profit), rupiah, { duration: 1000, delay: fresh ? 900 : 250 });
+  // The amount counts up from zero, like a till being totalled. A loss carries its minus sign.
+  const amount = h('p', { class: 'hero-result__amount', 'aria-label': rupiah(ledger.profit) });
+  const countDelay = fresh ? 900 : 250;
+  // The figure comes sharp over the same second in which it is counted (see ink-settle in app.css).
+  amount.style.setProperty('--count-delay', `${countDelay}ms`);
+  countUp(amount, Math.abs(ledger.profit), (value) => rupiah(gain ? value : -value), { duration: 1000, delay: countDelay });
 
   return h('section', { class: `hero-result ${gain ? 'hero-result--gain' : 'hero-result--loss'}`, 'aria-label': 'Hasil hari ini' }, [
     h('div', { class: 'hero-result__main' }, [
-      h('p', { class: 'hero-result__label', text: gain ? 'Laba hari ini' : 'Rugi hari ini' }),
+      // The stamp beside it says which it was; the words do not say it twice.
+      h('p', { class: 'hero-result__label', text: 'Hasil hari ini' }),
       h('span', { class: 'stamp', 'aria-hidden': 'true', text: gain ? 'Laba' : 'Rugi' }),
       amount,
     ]),
@@ -136,7 +140,8 @@ function resultHero(report, game, fresh) {
       fact('Kas sekarang', rupiah(ledger.cashAfter), game.status === STATUS.BANKRUPT && report.day === game.day ? 'kas habis' : null),
       fact(
         'Reputasi',
-        `${decimal(reputationBefore, 0)} → ${decimal(reputationAfter, 0)}`,
+        // To one decimal, like the change under it, so the two always agree.
+        `${decimal(reputationBefore, 1)} → ${decimal(reputationAfter, 1)}`,
         Math.abs(reputationChange) < 0.05 ? 'tetap' : `${signed(reputationChange, 1)} poin`,
       ),
       fact('Dilayani', `${integer(results.served)} dari ${integer(results.arrivals)}`, 'pelanggan yang datang'),
@@ -228,7 +233,11 @@ function customersCard(results) {
       note: 'stok sudah habis',
     },
   ];
-  const share = (count) => (results.arrivals > 0 ? count / results.arrivals : 0);
+  /** "8%", and "<1%" for a share too small to round to one. */
+  const share = (count) => {
+    const part = results.arrivals > 0 ? count / results.arrivals : 0;
+    return count > 0 && part < 0.005 ? '<1%' : percent(part);
+  };
 
   return h('section', { class: 'card', 'aria-labelledby': 'customers-title' }, [
     h('h2', { class: 'card__title', id: 'customers-title' }, [icon('users'), `${integer(results.arrivals)} pelanggan datang`]),
@@ -246,12 +255,12 @@ function customersCard(results) {
       'ul',
       { class: 'outcomes' },
       outcomes.map((outcome) =>
-        h('li', { class: `outcome outcome--${outcome.key}` }, [
+        h('li', { class: `outcome outcome--${outcome.key}${outcome.count === 0 ? ' outcome--none' : ''}` }, [
           h('span', { class: 'outcome__mark' }, icon(outcome.icon)),
           h('span', { class: 'outcome__count num', text: integer(outcome.count) }),
           h('span', { class: 'outcome__label' }, [
             h('strong', { text: outcome.label }),
-            h('small', { text: `${percent(share(outcome.count))} · ${outcome.note}` }),
+            h('small', { text: `${share(outcome.count)} · ${outcome.note}` }),
           ]),
         ]),
       ),
@@ -419,7 +428,7 @@ function reputationCard(report) {
             ),
           ]),
           h('p', { class: 'score__total' }, [
-            h('span', { class: 'num', text: `${decimal(Math.max(parts.points, 0), 1)} poin ÷ ${integer(results.arrivals)} pelanggan` }),
+            h('span', { class: 'num', text: `${decimal(Math.max(parts.points, 0), 1)} poin ÷ ${integer(results.arrivals)} pelanggan × 100` }),
             ' = skor hari ini ',
             h('strong', { class: 'num', text: decimal(score, 0) }),
           ]),
@@ -573,11 +582,7 @@ export function renderReport(container, { store }, day) {
 
   container.append(
     h('section', { class: 'view view--malam', 'aria-labelledby': 'view-title' }, [
-      h('header', { class: 'view__head' }, [
-        h('p', { class: 'eyebrow' }, [icon('moon'), `Hari ${report.day} dari ${DAY.count} · Malam`]),
-        heading,
-        dayCalendar(game, { selected: day }),
-      ]),
+      h('header', { class: 'view__head' }, [heading, dayCalendar(game, { selected: day })]),
       h('div', { class: 'report' }, [
         resultHero(report, game, fresh),
         tabs.list,
