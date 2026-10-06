@@ -15,8 +15,10 @@ npm start
 Lalu buka `http://localhost:8000`. Tanpa npm, perintah ini sama saja:
 
 ```bash
-python3 -m http.server 8000
+python3 scripts/serve.py 8000
 ```
+
+Server kecil itu sama dengan `python3 -m http.server`, hanya saja ia meminta browser tidak menyimpan salinan berkas. Permainan ini terdiri dari banyak modul kecil, dan browser yang memegang salinan lama dari satu modul di samping salinan baru dari modul lain akan menampilkan halaman kosong. Untuk kejadian yang sama di situs yang sudah tayang, `index.html` memuat ulang semua berkasnya sekali kalau halaman ternyata kosong.
 
 Untuk GitHub Pages, cukup aktifkan Pages pada branch utama dengan folder root. Semua alamat di dalam proyek relatif, jadi tidak ada yang perlu diubah.
 
@@ -149,7 +151,7 @@ src/sim/              mesin discrete-event simulation
 src/analytic/         rumus tunak dan penyelesai satu hari
 src/game/             aturan permainan: ekonomi, kejadian, reputasi, penjelasan
 src/ui/               tampilan: layar, animasi canvas, suara, tokoh
-scripts/              penurunan angka keseimbangan dan pencetak validasi
+scripts/              penurunan angka keseimbangan, pencetak validasi, server lokal
 tests/                tes (node --test)
 ```
 

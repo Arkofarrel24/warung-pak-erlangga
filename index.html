@@ -191,5 +191,40 @@
     <noscript>
       <p class="noscript">Permainan ini membutuhkan JavaScript. Aktifkan JavaScript di browser, lalu muat ulang halaman.</p>
     </noscript>
+
+    <!--
+      The game is many small module files. Right after an update a browser can
+      hold an old copy of one beside a new copy of another, and then nothing
+      starts: the page stays empty. When that has happened, every file the
+      page asked for is fetched again past the cache and the page is loaded
+      once more. This is tried only once; if the page is still empty after
+      it, it says so.
+    -->
+    <script>
+      window.addEventListener('load', function () {
+        var main = document.getElementById('main');
+        var KEY = 'warung-pak-erlangga:refetched';
+        var tried = false;
+        try {
+          tried = sessionStorage.getItem(KEY) === '1';
+          if (main.childElementCount > 0) return sessionStorage.removeItem(KEY);
+          sessionStorage.setItem(KEY, '1');
+        } catch (error) {
+          if (main.childElementCount > 0) return;
+          tried = true; // without storage there is no way to try only once
+        }
+        if (tried || !window.fetch) {
+          main.innerHTML =
+            '<p class="noscript">Halaman gagal dimuat. Tekan Ctrl + Shift + R (di Mac: Cmd + Shift + R) untuk memuat ulang sepenuhnya.</p>';
+          return;
+        }
+        var files = performance
+          .getEntriesByType('resource')
+          .map(function (entry) { return entry.name; })
+          .filter(function (url) { return url.indexOf(location.origin) === 0 && /\.(js|css)(\?|$)/.test(url); });
+        Promise.all(files.map(function (url) { return fetch(url, { cache: 'reload' }).catch(function () {}); }))
+          .then(function () { location.reload(); });
+      });
+    </script>
   </body>
 </html>
