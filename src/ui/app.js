@@ -252,11 +252,11 @@ const PHASES = {
 
 const TITLES = {
   home: () => GAME_NAME,
-  morning: () => `Hari ${store.game.day}: pagi · ${GAME_NAME}`,
-  shop: () => `${SHOP_NAME} · ${GAME_NAME}`,
-  day: () => `Hari ${store.game.day}: warung buka · ${GAME_NAME}`,
-  report: (route) => `Laporan hari ke-${route.day} · ${GAME_NAME}`,
-  end: () => `Hasil akhir · ${GAME_NAME}`,
+  morning: () => `Hari ${store.game.day}: pagi - ${GAME_NAME}`,
+  shop: () => `${SHOP_NAME} - ${GAME_NAME}`,
+  day: () => `Hari ${store.game.day}: warung buka - ${GAME_NAME}`,
+  report: (route) => `Laporan hari ke-${route.day} - ${GAME_NAME}`,
+  end: () => `Hasil akhir - ${GAME_NAME}`,
 };
 
 function render() {

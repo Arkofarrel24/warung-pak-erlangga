@@ -22,6 +22,10 @@ export const STREAM = Object.freeze({
   PATIENCE: 5,
   // Which unexpected event, if any, a game day brings.
   EVENTS: 6,
+  // Which customers leave a tip on the counter.
+  TIPS: 7,
+  // Which of the day's small goals a game day sets.
+  CHALLENGES: 8,
 });
 
 // Initial rounds that are thrown away so the starting state gets mixed first

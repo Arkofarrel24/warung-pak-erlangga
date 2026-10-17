@@ -44,13 +44,20 @@ export const DEMAND = Object.freeze({
    *
    *   demand factor = e^(-(price - reference price) / s)
    *
-   * Every Rp 1,000 added to the price turns away about 13% of customers.
+   * Every Rp 1,000 added to the price turns away about 18% of customers.
    * This curve has a simple optimum: with unlimited capacity, margin times
    * demand, (p - v)·e^(-(p - p0)/s), is largest at p = v + s. When the
    * warung is congested the best price is higher still, because customers
    * lost to a higher price were going to be lost to the queue anyway.
+   *
+   * A model number, chosen so that the price is one decision among several
+   * and not the whole game: with s = 5,000 the best price without a queue
+   * is Rp 11,000, one step above the starting price, and a price far above
+   * it empties the warung faster than the margin grows. (At 7,000, which
+   * this game first used, Rp 15,000 alone won three stars in 94 games of
+   * 100; see section 13 of `npm run balance`.)
    */
-  priceSensitivity: 7_000,
+  priceSensitivity: 5_000,
 
   /**
    * Reputation (0 to 100) scales the whole profile in a straight line:
@@ -165,14 +172,31 @@ export const COSTS = Object.freeze({
  * Working: the starting setup is expected to earn Rp 70,000 a day, and
  * 1.5 x 70,000 = 105,000, which rounds to Rp 100,000. From day 8 the same
  * setup loses about Rp 30,000 a day. Over 300 games a player who never
- * changes anything then ends on Rp 0.85 million instead of Rp 1.61 million
- * and goes under in 15% of them, while a careful owner still ends above
+ * changes anything then ends on Rp 1.1 million, busier second week included,
+ * and goes under in 7% of them, while a careful owner still ends above
  * Rp 6 million.
  *
  * The rise is announced on the first morning. A rise that is known is a
  * reason to plan; one that is not would only be a trap.
  */
 export const RENT_RISE = Object.freeze({ fromDay: 8, amount: 100_000 });
+
+/**
+ * From the second week the warung is known: more customers come at every
+ * hour of the day, on the same day the rent goes up. λ(t) is multiplied by
+ * `demandFactor` and nothing else changes, so the queue is the same model
+ * with a busier street.
+ *
+ * Rule: a warung that is run well should meet its queue again. A careful
+ * owner (3 pegawai, Rp 13,000) has by then raised the price and the
+ * reputation until the lunch peak sits well under what the pegawai can
+ * serve. The factor is what brings that peak back to capacity, traffic
+ * intensity a = λ ÷ (c·μ) = 1, rounded to one decimal.
+ *
+ * Working: see `growthByRule` in scripts/derive.js and section 13 of
+ * `npm run balance`.
+ */
+export const GROWTH = Object.freeze({ fromDay: 8, demandFactor: 1.4 });
 
 /**
  * Stars at the end of a game: the cash it takes for two and for three.
@@ -185,8 +209,8 @@ export const RENT_RISE = Object.freeze({ fromDay: 8, amount: 100_000 });
  * games of a careful owner (a third pegawai, a higher price, and stock to
  * match), so sound decisions earn them whatever the luck of the events.
  * Working: the best 5% of players who never change anything end near
- * Rp 1.6 million, far below 2 x 1,500,000 = Rp 3,000,000. The worst 5% of
- * careful owners end near Rp 5.4 million, above Rp 5,000,000.
+ * Rp 1.75 million, far below 2 x 1,500,000 = Rp 3,000,000. The worst 5% of
+ * careful owners end near Rp 5.5 million, above Rp 5,000,000.
  */
 export const STARS = Object.freeze({ two: 3_000_000, three: 5_000_000 });
 
@@ -225,6 +249,56 @@ export const START = Object.freeze({
 });
 
 /**
+ * Tips: a customer who is served the moment they walk in, without having to
+ * sit down and wait, sometimes leaves a coin on the counter. The player picks
+ * it up while watching the day, before it is gone.
+ *
+ * Tips are outside the queueing model. They change who is served, how long
+ * anyone waits, and the reputation by nothing at all; they only add a little
+ * to the cash. What they do depend on is the model's own probability of not
+ * having to wait: a warung with enough pegawai for its crowd sees more
+ * customers served at once, and so more coins.
+ *
+ * `amount` and `shelfLife` are model numbers: the coin a customer leaves
+ * behind from their change, and 40 minutes on the counter, which is four
+ * seconds of watching at normal speed.
+ *
+ * Rule for `chance`: picking up every coin of a day at the starting setup
+ * should be worth about a quarter of what that day is expected to earn.
+ * Enough to be worth the attention, far too little to live on. The chance
+ * is rounded to the nearest 5%.
+ *
+ * Working: 96.9 customers a day are served without waiting, and a quarter of
+ * the expected profit of Rp 70,000 is Rp 17,500, which is 17.5 coins:
+ * 17.5 / 96.9 = 18%, rounded to one customer in five. Over 300 games a
+ * player who never changes anything and never misses a coin gains
+ * Rp 280,000, and the best 5% of them still end near Rp 2.0 million, far
+ * below two stars; one pegawai or a price near cost still goes under every
+ * time. A careful owner gains Rp 370,000 on top of more than Rp 6 million.
+ */
+export const TIPS = Object.freeze({ amount: 1_000, shelfLife: 40 / 60, chance: 0.2 });
+
+/**
+ * The day's challenge: one small goal a day, read off the day's own report.
+ * Meeting it earns a stamp on the calendar and a little cash.
+ *
+ * Rule for the thresholds: each is the median day of a careful owner
+ * (3 pegawai, Rp 13,000, stock to match), so that a warung run well meets
+ * its challenge about every other day and one run badly hardly ever does.
+ *
+ *   servedShare  customers served, as a share of those who came (to 5%)
+ *   reneged      customers who gave up waiting
+ *   lost         customers lost in any way: gave up, found it full, or sold out
+ *   stockMiss    portions left over plus customers who found nothing left:
+ *                how far the stock was from the day's demand, either way
+ *
+ * Rule for the reward: all fourteen stamps together are worth one ordinary
+ * day's expected profit at the starting setup, so the cash stays the score.
+ * Working: Rp 70,000 / 14 = Rp 5,000.
+ */
+export const CHALLENGES = Object.freeze({ reward: 5_000, servedShare: 0.9, reneged: 5, lost: 17, stockMiss: 10 });
+
+/**
  * One-time purchases. Each changes exactly one parameter of the queue, so
  * that buying it teaches what that parameter does.
  *
@@ -234,21 +308,22 @@ export const START = Object.freeze({
  * the last week loses money.
  */
 export const UPGRADES = Object.freeze({
-  /** A faster cash register: μ x 1.2. Brings Rp 1,128,000; half is Rp 564,000. */
-  cashRegister: Object.freeze({ cost: 550_000, serviceFactor: 1.2 }),
+  /** A faster cash register: μ x 1.2. Brings Rp 1,313,000; half is Rp 656,000. */
+  cashRegister: Object.freeze({ cost: 650_000, serviceFactor: 1.2 }),
   /**
    * Queue numbers: customers take a number and need not stand in line, so
    * they wait longer before giving up. Mean patience x 1.5, that is θ / 1.5.
-   * Brings Rp 181,000; half is Rp 91,000.
+   * Brings Rp 186,000; half is Rp 93,000.
    */
   queueNumbers: Object.freeze({ cost: 90_000, patienceFactor: 1.5 }),
   /**
    * A shift board: pegawai can be scheduled per shift instead of per day.
    * Valued differently, since it changes nothing until the schedule does:
    * the best schedule against the best fixed number of pegawai.
-   * Brings Rp 505,000; half is Rp 253,000.
+   * Brings Rp 1,031,000; half is Rp 515,000: in the busier second week the
+   * best schedule (3, 6, 3, 5) is far from any fixed number of pegawai.
    */
-  shiftBoard: Object.freeze({ cost: 250_000 }),
+  shiftBoard: Object.freeze({ cost: 525_000 }),
 });
 
 /**
@@ -256,22 +331,22 @@ export const UPGRADES = Object.freeze({
  * It is team-wide on purpose: with servers of different speeds the system
  * would no longer be M/M/c, and the formulas would not apply.
  *
- * Each level brings less than the one before (Rp 635,000, then Rp 531,000,
- * then Rp 439,000), so by the same rule each costs less: diminishing returns.
+ * Each level brings less than the one before (Rp 772,000, then Rp 670,000,
+ * then Rp 579,000), so by the same rule each costs less: diminishing returns.
  */
 export const TRAINING = Object.freeze([
   Object.freeze({ serviceFactor: 1, wageFactor: 1, cost: 0 }),
-  Object.freeze({ serviceFactor: 1.15, wageFactor: 1.08, cost: 325_000 }),
-  Object.freeze({ serviceFactor: 1.3, wageFactor: 1.16, cost: 275_000 }),
-  Object.freeze({ serviceFactor: 1.45, wageFactor: 1.24, cost: 225_000 }),
+  Object.freeze({ serviceFactor: 1.15, wageFactor: 1.08, cost: 375_000 }),
+  Object.freeze({ serviceFactor: 1.3, wageFactor: 1.16, cost: 325_000 }),
+  Object.freeze({ serviceFactor: 1.45, wageFactor: 1.24, cost: 300_000 }),
 ]);
 
 /**
  * One more waiting seat (K grows by one). Priced by the same rule on the
- * first extra seat, which brings Rp 153,000; half is Rp 76,000. The second
- * extra seat brings only Rp 35,000, and the ones after that nothing.
+ * first extra seat, which brings Rp 163,000; half is Rp 82,000. The second
+ * extra seat brings only Rp 33,000, and the ones after that nothing.
  */
-export const SEAT_COST = 75_000;
+export const SEAT_COST = 80_000;
 
 // ---------------------------------------------------------------------------
 // EVENTS

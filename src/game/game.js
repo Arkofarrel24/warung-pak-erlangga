@@ -9,7 +9,8 @@
  */
 
 import { QueueSimulation } from '../sim/engine.js';
-import { DAY, LIMITS, REPUTATION, SHIFTS, STARS, START, TRAINING, UPGRADES } from './config.js';
+import { challengeForDay, challengeMet } from './challenges.js';
+import { CHALLENGES, DAY, LIMITS, REPUTATION, SHIFTS, STARS, START, TRAINING, UPGRADES } from './config.js';
 import {
   applyPurchases,
   dayModel,
@@ -23,6 +24,8 @@ import {
 import { priceFactor, reputationFactor } from './demand.js';
 import { eventForDay, ingredientCost, morningNews } from './events.js';
 import { dayScore, nextReputation } from './reputation.js';
+import { createGuestBook } from './reviews.js';
+import { createTipJar } from './tips.js';
 
 export const SAVE_VERSION = 1;
 
@@ -180,6 +183,10 @@ function jsonSafe(value) {
  * all at once with `simulation.run()`, or event by event for the animation.
  * Once it has finished, `finish()` closes the books and returns the next
  * state together with the day's report.
+ *
+ * `tips` is the day's tip jar (see tips.js). Whoever watches the day tells it
+ * about the customers who leave and the coins picked up; a day that is not
+ * watched simply ends with an empty jar.
  */
 export function startDay(state, rawDecisions) {
   const problems = checkDecisions(state, rawDecisions);
@@ -198,13 +205,30 @@ export function startDay(state, rawDecisions) {
     // Each day gets its own random sequences.
     replication: state.day,
   });
+  const tips = createTipJar(state.seed, state.day);
+  const challenge = challengeForDay(state.seed, state.day);
+
+  // The guest book reads every event as the engine reports it, however the
+  // day is run: watched event by event, or all at once. It only reads.
+  const guests = createGuestBook();
+  const step = simulation.step.bind(simulation);
+  simulation.step = () => {
+    const record = step();
+    guests.note(record);
+    return record;
+  };
 
   function finish() {
     if (!simulation.finished) throw new Error('The day has not ended yet.');
 
     const { WqByClass, ...kept } = simulation.results;
     const results = jsonSafe(kept);
-    const ledger = settle(state, equipped, decisions, simulation.results, event);
+    const ledger = settle(state, equipped, decisions, simulation.results, event, tips.amount);
+    // The day's challenge, judged from the day's own totals. Its small reward
+    // goes into the cash, not into the profit: it is not something the warung sold.
+    const met = challengeMet(challenge, simulation.results);
+    ledger.stamp = met ? CHALLENGES.reward : 0;
+    ledger.cashAfter += ledger.stamp;
     const score = dayScore(simulation.results);
     const reputationAfter = nextReputation(state.reputation, score);
 
@@ -225,6 +249,11 @@ export function startDay(state, rawDecisions) {
         ingredientCost: ingredientCost(event),
       },
       results,
+      // The coins left on the counter, and how many of them were picked up.
+      tips: { left: tips.left, taken: tips.taken },
+      challenge: { id: challenge, met },
+      // A few customers of the day, as the engine simulated them (see reviews.js).
+      reviews: guests.pick(),
       ledger,
       score,
       reputationBefore: state.reputation,
@@ -250,7 +279,7 @@ export function startDay(state, rawDecisions) {
     };
   }
 
-  return { simulation, model, decisions, event, finish };
+  return { simulation, model, decisions, event, tips, challenge, finish };
 }
 
 /**

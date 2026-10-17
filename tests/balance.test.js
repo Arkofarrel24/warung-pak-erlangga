@@ -13,6 +13,8 @@ import test from 'node:test';
 
 import {
   cashByRule,
+  challengesByRule,
+  growthByRule,
   demandSample,
   eventEffects,
   fresh,
@@ -24,9 +26,11 @@ import {
   rentByRule,
   rentRiseByRule,
   startDecisions,
+  tipsByRule,
+  TIPS_PROFIT_SHARE,
   wageByRule,
 } from '../scripts/derive.js';
-import { COSTS, RENT_RISE, SEAT_COST, STARS, START, TRAINING, UPGRADES } from '../src/game/config.js';
+import { CHALLENGES, COSTS, DAY, GROWTH, RENT_RISE, SEAT_COST, STARS, START, TIPS, TRAINING, UPGRADES } from '../src/game/config.js';
 import { rentOn } from '../src/game/day.js';
 import { stars, STATUS } from '../src/game/game.js';
 
@@ -163,4 +167,50 @@ test('the stars separate standing still from sound decisions', () => {
   assert.equal(stars({ ...won, cash: 0 }), 1);
   assert.equal(stars({ status: STATUS.BANKRUPT, cash: -1 }), 0);
   assert.equal(stars({ status: STATUS.PLAYING, cash: 9_000_000 }), 0);
+});
+
+test('tips: every coin of a day is worth about a quarter of that day\'s profit', () => {
+  const { chance, perDay, profit } = tipsByRule();
+
+  assert.equal(TIPS.chance, chance);
+  // Rounding the chance to a step of 5% may move the day's tips a little off the quarter.
+  assert.ok(Math.abs(perDay / profit - TIPS_PROFIT_SHARE) < 0.05, `a day of tips is ${Math.round(perDay)} of ${Math.round(profit)}`);
+});
+
+test('tips reward attention, but cannot stand in for sound decisions', () => {
+  const policy = (id) => POLICIES.find((item) => item.id === id).policy;
+  // The most tips can ever do: every coin of every day picked up.
+  const still = playGames(policy('unchanged'), 150, { tips: true });
+  const without = playGames(policy('unchanged'), 150);
+
+  // They are worth having...
+  assert.ok(still.meanTips > 100_000, `tips over a game: ${still.meanTips}`);
+  assert.ok(still.meanCash > without.meanCash);
+  // ...but standing still does not earn the second star with them either,
+  assert.ok(still.highCash < STARS.two, `the best of standing still, with every tip: ${still.highCash}`);
+  // and a plain mistake stays fatal.
+  assert.ok(playGames(policy('understaffed'), 150, { tips: true }).bankruptShare >= 0.9);
+  assert.ok(playGames(policy('cheap'), 150, { tips: true }).bankruptShare >= 0.9);
+});
+
+test('growth: the second week brings a careful owner back to capacity at lunch', () => {
+  const { factor, intensity } = growthByRule();
+
+  assert.equal(GROWTH.demandFactor, factor);
+  assert.equal(GROWTH.fromDay, RENT_RISE.fromDay, 'the crowd and the rent grow on the same morning');
+  // Before the growth the peak leaves the counter with room to spare; after it, none.
+  assert.ok(intensity < 0.8, `peak intensity before the growth: ${intensity}`);
+  assert.ok(Math.abs(intensity * GROWTH.demandFactor - 1) < 0.05);
+});
+
+test('challenges: a careful owner meets each about every other day, and the stamps stay small', () => {
+  const rule = challengesByRule();
+
+  assert.equal(CHALLENGES.servedShare, rule.servedShare);
+  assert.equal(CHALLENGES.reneged, rule.reneged);
+  assert.equal(CHALLENGES.lost, rule.lost);
+  assert.equal(CHALLENGES.stockMiss, rule.stockMiss);
+  assert.equal(CHALLENGES.reward, rule.reward);
+  // All fourteen stamps together: no more than one ordinary day's expected profit.
+  assert.ok(CHALLENGES.reward * DAY.count <= rule.profit);
 });

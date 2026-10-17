@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { COSTS, DEMAND, REPUTATION, SEAT_COST, TRAINING, UPGRADES } from '../src/game/config.js';
+import { COSTS, DEMAND, GROWTH, REPUTATION, SEAT_COST, TRAINING, UPGRADES } from '../src/game/config.js';
 import {
   applyPurchases,
   dayModel,
@@ -18,7 +18,7 @@ import {
   staffPerShift,
   wagePerHour,
 } from '../src/game/day.js';
-import { arrivalProfile, priceFactor, reputationFactor } from '../src/game/demand.js';
+import { arrivalProfile, growthFactor, priceFactor, reputationFactor } from '../src/game/demand.js';
 import { defaultDecisions, newGame } from '../src/game/game.js';
 import { dayScore, nextReputation } from '../src/game/reputation.js';
 import { ArrivalProfile } from '../src/sim/arrival-profile.js';
@@ -40,12 +40,12 @@ const withUpgrades = (state, ...ids) => ({
 // Demand
 // ---------------------------------------------------------------------------
 
-test('the price factor is 1 at the reference price and falls by e per Rp 7,000', () => {
+test('the price factor is 1 at the reference price and falls by e per Rp 5,000', () => {
   assert.equal(priceFactor(10_000), 1);
-  assertClose(priceFactor(17_000), Math.exp(-1));
-  assertClose(priceFactor(3_000), Math.exp(1));
-  // Each Rp 1,000 turns away about 13% of customers.
-  assertClose(1 - priceFactor(11_000), 0.133, 0.001);
+  assertClose(priceFactor(15_000), Math.exp(-1));
+  assertClose(priceFactor(5_000), Math.exp(1));
+  // Each Rp 1,000 turns away about 18% of customers.
+  assertClose(1 - priceFactor(11_000), 0.181, 0.001);
 });
 
 test('with unlimited capacity the best price is ingredient cost plus price sensitivity', () => {
@@ -53,8 +53,8 @@ test('with unlimited capacity the best price is ingredient cost plus price sensi
   const income = (price) => (price - COSTS.ingredient) * priceFactor(price);
   const best = COSTS.ingredient + DEMAND.priceSensitivity;
 
-  assert.equal(best, 13_000);
-  for (const price of [8_000, 10_000, 12_500, 13_500, 16_000, 20_000]) {
+  assert.equal(best, 11_000);
+  for (const price of [8_000, 10_000, 10_500, 11_500, 13_000, 16_000, 20_000]) {
     assert.ok(income(best) > income(price), `Rp ${price} should bring less than Rp ${best}`);
   }
 });
@@ -79,10 +79,24 @@ test('at the reference price and a reputation of 50 the arrival profile is the b
 });
 
 test('price and reputation scale the whole profile together', () => {
-  const profile = arrivalProfile({ price: 17_000, reputation: 100 });
+  const profile = arrivalProfile({ price: 15_000, reputation: 100 });
   const factor = Math.exp(-1) * 1.6;
 
   profile.forEach((point, hour) => assertClose(point.rate, DEMAND.baseProfile[hour] * factor, 1e-12));
+});
+
+test('from the second week the same price and reputation bring more customers', () => {
+  const first = arrivalProfile({ price: 12_000, reputation: 70, day: GROWTH.fromDay - 1 });
+  const second = arrivalProfile({ price: 12_000, reputation: 70, day: GROWTH.fromDay });
+
+  assert.equal(growthFactor(1), 1);
+  assert.equal(growthFactor(GROWTH.fromDay - 1), 1);
+  assert.equal(growthFactor(GROWTH.fromDay), GROWTH.demandFactor);
+  assert.equal(growthFactor(14), GROWTH.demandFactor);
+  // Every hour by the same factor: the shape of the day does not change.
+  second.forEach((point, hour) => assertClose(point.rate, first[hour].rate * GROWTH.demandFactor, 1e-12));
+  // Without a day, a day of the first week.
+  assert.deepEqual(arrivalProfile({ price: 12_000, reputation: 70 }), first);
 });
 
 // ---------------------------------------------------------------------------
@@ -173,7 +187,7 @@ test('purchases add up, and buying leaves the earlier state untouched', () => {
   const expected =
     2 * SEAT_COST + TRAINING[1].cost + UPGRADES.cashRegister.cost + UPGRADES.shiftBoard.cost;
 
-  assert.equal(expected, 150_000 + 325_000 + 550_000 + 250_000);
+  assert.equal(expected, 160_000 + 375_000 + 650_000 + 525_000);
   assert.equal(purchaseCost(state, buy), expected);
   assert.equal(purchaseCost(state, {}), 0);
   assert.equal(purchaseCost(state), 0);
@@ -187,9 +201,9 @@ test('purchases add up, and buying leaves the earlier state untouched', () => {
 });
 
 test('each training level has its own price', () => {
-  assert.equal(purchaseCost({ ...fresh(), trainingLevel: 0 }, { training: true }), 325_000);
-  assert.equal(purchaseCost({ ...fresh(), trainingLevel: 1 }, { training: true }), 275_000);
-  assert.equal(purchaseCost({ ...fresh(), trainingLevel: 2 }, { training: true }), 225_000);
+  assert.equal(purchaseCost({ ...fresh(), trainingLevel: 0 }, { training: true }), 375_000);
+  assert.equal(purchaseCost({ ...fresh(), trainingLevel: 1 }, { training: true }), 325_000);
+  assert.equal(purchaseCost({ ...fresh(), trainingLevel: 2 }, { training: true }), 300_000);
 });
 
 test('the starting decisions become an M(t)/M/2/4+M queue', () => {
@@ -255,7 +269,7 @@ test('the accounts match the hand calculation', () => {
   //   wages         24.5 x 8,500           -208,250
   //   rent                                 -375,000
   //   profit                                196,750
-  //   cash          1,500,000 - 75,000 (seat) + 196,750 = 1,621,750
+  //   cash          1,500,000 - 80,000 (seat) + 196,750 = 1,616,750
   const before = fresh();
   const decisions = { ...defaultDecisions(before), price: 12_000, stock: 150, seats: 3, buy: { seats: 1 } };
   const equipped = applyPurchases(before, decisions.buy);
@@ -267,16 +281,35 @@ test('the accounts match the hand calculation', () => {
 
   assert.deepEqual(ledger, {
     revenue: 1_680_000,
+    tips: 0,
     ingredients: 900_000,
     waste: 60_000,
     wages: 208_250,
     paidHours: 24.5,
     rent: 375_000,
     profit: 196_750,
-    purchases: 75_000,
+    purchases: 80_000,
     cashBefore: 1_500_000,
-    cashAfter: 1_621_750,
+    cashAfter: 1_616_750,
   });
+});
+
+test('tips are income of the day, on top of the sales', () => {
+  // The same day as above, with 17 coins of Rp 1,000 picked up from the counter:
+  //   profit   196,750 + 17,000 = 213,750
+  //   cash     1,616,750 + 17,000 = 1,633,750
+  const before = fresh();
+  const decisions = { ...defaultDecisions(before), price: 12_000, stock: 150, seats: 3, buy: { seats: 1 } };
+  const equipped = applyPurchases(before, decisions.buy);
+  const results = { served: 140, stockLeft: 10, totalStaffedTime: 24.5 };
+  const without = settle(before, equipped, decisions, results);
+  const withTips = settle(before, equipped, decisions, results, null, 17_000);
+
+  assert.equal(withTips.tips, 17_000);
+  assert.equal(withTips.profit, 213_750);
+  assert.equal(withTips.cashAfter, 1_633_750);
+  // Nothing else on the receipt moves.
+  assert.deepEqual({ ...withTips, tips: 0, profit: without.profit, cashAfter: without.cashAfter }, without);
 });
 
 test('ingredients are paid for the portions prepared, not the portions sold', () => {

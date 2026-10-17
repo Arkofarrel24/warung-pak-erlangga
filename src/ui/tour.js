@@ -28,6 +28,8 @@ const EDGE = 10;
 export function startTour(steps, { onEnd } = {}) {
   let index = 0;
   let frameId = null;
+  /** Whether the light and the card have been put where the first step is. */
+  let placed = false;
   const targetOf = (step) => (typeof step.target === 'function' ? step.target() : step.target);
 
   const hole = h('div', { class: 'tour__hole' });
@@ -50,6 +52,9 @@ export function startTour(steps, { onEnd } = {}) {
   /** Keeps the light on the target and the card next to it, wherever the page has scrolled to. */
   function place() {
     frameId = window.requestAnimationFrame(place);
+    // From the second frame on, a change of place is a journey (see data-placed in app.css).
+    if (placed) dialog.dataset.placed = '';
+    placed = true;
     const rect = targetOf(steps[index]).getBoundingClientRect();
     const { innerWidth: width, innerHeight: height } = window;
 
@@ -88,7 +93,9 @@ export function startTour(steps, { onEnd } = {}) {
     index = nextIndex;
     const step = steps[index];
     const last = index === steps.length - 1;
-    count.textContent = `Pak Erlangga · ${index + 1} dari ${steps.length}`;
+    count.textContent = `${index + 1} dari ${steps.length}`;
+    // A single step is not a count of anything.
+    count.hidden = steps.length === 1;
     title.textContent = step.title;
     text.textContent = step.text;
     back.hidden = index === 0;

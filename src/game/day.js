@@ -76,7 +76,7 @@ export function staffPerShift(state, decisions) {
 export function dayModel(state, decisions, event = null) {
   const model = {
     arrivalProfile: eventArrivalProfile(
-      arrivalProfile({ price: decisions.price, reputation: state.reputation }),
+      arrivalProfile({ price: decisions.price, reputation: state.reputation, day: state.day }),
       event,
     ),
     serviceRate: serviceRate(state),
@@ -108,6 +108,8 @@ export function dayModel(state, decisions, event = null) {
  *                may put someone at the counter unpaid, or keep a pegawai
  *                on the payroll while away from it (see paidStaffTime)
  *   rent         a fixed amount per day, higher from the second week on
+ *   tips         the coins picked up from the counter during the day; income
+ *                like the sales, but not from the queue (see tips.js)
  *
  * Purchases (seats, training, upgrades) are investments and are kept out of
  * the day's profit, but they do come out of the cash.
@@ -120,7 +122,7 @@ export function paidStaffTime(state, decisions, totalStaffedTime, event = null) 
   return totalStaffedTime - hoursOffPayroll(staffPerShift(state, decisions), event);
 }
 
-export function settle(stateBefore, state, decisions, results, event = null) {
+export function settle(stateBefore, state, decisions, results, event = null, tips = 0) {
   const perPortion = ingredientCost(event);
   const revenue = decisions.price * results.served;
   const ingredients = perPortion * decisions.stock;
@@ -128,9 +130,10 @@ export function settle(stateBefore, state, decisions, results, event = null) {
   const wages = Math.round(wagePerHour(state) * paidHours);
   const rent = rentOn(stateBefore.day);
   const purchases = purchaseCost(stateBefore, decisions.buy);
-  const profit = revenue - ingredients - wages - rent;
+  const profit = revenue + tips - ingredients - wages - rent;
   return {
     revenue,
+    tips,
     ingredients,
     // Portions thrown away at closing, at cost.
     waste: perPortion * results.stockLeft,

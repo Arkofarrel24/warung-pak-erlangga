@@ -1,0 +1,1012 @@
+/*
+ * A redesign concept: "one stall, three times of day".
+ *
+ * The warung is always on screen, on the left, and takes the light of the
+ * hour. Everything the player reads or presses is on a single panel beside
+ * it, written on the dark of a menu board at night with one color of light:
+ * the yellow of the lamp over the counter.
+ *
+ * One accent (--k-lamp). Surfaces have a 14px corner; whatever is pressed is
+ * a pill. Green and red only ever mean gain and loss.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --k-bg: #0d1513; /*      the board at night */
+  --k-panel: #131e1b;
+  --k-raise: #1b2925;
+  --k-line: rgb(241 238 228 / 0.13);
+  --k-text: #f1eee4; /*    chalk */
+  --k-muted: #a3aea6; /*   7:1 on the panel */
+  --k-lamp: #ffc43d; /*    the one accent */
+  --k-on-lamp: #1a1405;
+  --k-good: #7fe0a0;
+  --k-bad: #ff9079;
+
+  --k-display: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+  --k-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --k-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --k-radius: 14px;
+  --k-pill: 999px;
+  --k-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --k-gutter: clamp(16px, 3vw, 32px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--k-bg);
+  color: var(--k-text);
+  font-family: var(--k-body);
+  font-size: 1rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+ol,
+ul,
+dl,
+dd {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+::selection {
+  background: var(--k-lamp);
+  color: var(--k-on-lamp);
+}
+
+:focus-visible {
+  outline: 2px solid var(--k-lamp);
+  outline-offset: 3px;
+}
+
+.num {
+  font-family: var(--k-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A figure that follows from a choice: the color of the lamp. */
+.live {
+  font-family: var(--k-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--k-lamp);
+  white-space: nowrap;
+}
+
+.is-good {
+  color: var(--k-good);
+}
+
+.is-bad {
+  color: var(--k-bad);
+}
+
+/* --- The strip that says what this page is ------------------------------------ */
+
+.note {
+  padding: 8px var(--k-gutter);
+  border-bottom: 1px solid var(--k-line);
+  font-size: 0.8125rem;
+  color: var(--k-muted);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* --- The bar: the name, where in the day, and the three figures ------------------ */
+
+.bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  max-width: 1400px;
+  min-height: 64px;
+  margin-inline: auto;
+  padding: 0 var(--k-gutter);
+}
+
+.bar__name {
+  justify-self: start;
+  font-family: var(--k-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-pill);
+}
+
+.track li {
+  padding: 6px 16px;
+  border-radius: var(--k-pill);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--k-muted);
+  transition:
+    background-color 240ms var(--k-ease),
+    color 240ms var(--k-ease);
+}
+
+.track li[aria-current='step'] {
+  background: var(--k-lamp);
+  color: var(--k-on-lamp);
+  font-weight: 600;
+}
+
+.stats {
+  justify-self: end;
+  display: flex;
+  gap: 24px;
+}
+
+.stats div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.stats dt {
+  font-size: 0.8125rem;
+  color: var(--k-muted);
+}
+
+.stats dd {
+  font-family: var(--k-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* --- The shell: the warung on the left, the panel on the right -------------------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  max-width: 1400px;
+  margin-inline: auto;
+  padding: 16px var(--k-gutter) 64px;
+}
+
+.shell > * {
+  min-width: 0;
+}
+
+.stage {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  /* It keeps its place while the panel changes. */
+  view-transition-name: stage;
+}
+
+.stage__frame {
+  overflow: hidden;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-radius);
+  background: var(--k-panel);
+}
+
+.stage__canvas {
+  display: block;
+  width: 100%;
+  height: 240px; /* set by the scene once it knows its width */
+}
+
+.stage__foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--k-line);
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+.stage__clock {
+  font-family: var(--k-mono);
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--k-text);
+}
+
+/* How far the day has come: a line that fills, with nothing behind it but the rule it runs on. */
+.stage__progress {
+  flex: 1 1 auto;
+  height: 2px;
+  background: var(--k-line);
+}
+
+.stage__progress span {
+  display: block;
+  height: 100%;
+  background: var(--k-lamp);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+/* Fourteen days as fourteen short lines: green for a gain, red for a loss, lit for today. */
+.days {
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.days li {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--k-line);
+}
+
+.days li[data-result='gain'] {
+  background: var(--k-good);
+}
+
+.days li[data-result='loss'] {
+  background: var(--k-bad);
+}
+
+.days li[aria-current='true'] {
+  background: var(--k-lamp);
+}
+
+@media (min-width: 960px) {
+  .shell {
+    grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr);
+    gap: clamp(24px, 3vw, 48px);
+    align-items: start;
+    padding-top: 24px;
+  }
+
+  .stage {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+@media (max-width: 959px) {
+  .bar {
+    grid-template-columns: 1fr auto;
+    row-gap: 0;
+    padding-block: 8px;
+  }
+
+  .track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: start;
+    margin-bottom: 8px;
+  }
+
+  /* The name and the three figures share one line on a phone; the figures go without their labels. */
+  .bar__name {
+    font-size: 1rem;
+  }
+
+  .stats {
+    gap: 12px;
+    font-size: 0.875rem;
+  }
+
+  .stats dt {
+    display: none;
+  }
+
+  .sums--across {
+    padding-inline: 12px;
+  }
+
+  .sums--across div {
+    padding-inline: 10px;
+  }
+
+  .sums--across dd {
+    font-size: 0.875rem;
+  }
+
+  /*
+   * On a phone the picture of the warung stays at the top while everything
+   * else scrolls under it: the panel first, and the hours after the panel.
+   */
+  .stage {
+    display: contents;
+  }
+
+  .stage__frame {
+    position: sticky;
+    top: 8px;
+    z-index: 2;
+    box-shadow: 0 -16px 0 8px var(--k-bg);
+  }
+
+  .panel {
+    order: 1;
+  }
+
+  .under {
+    order: 2;
+  }
+}
+
+/* --- The panel ---------------------------------------------------------------- */
+
+.panel {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+.panel > * {
+  min-width: 0;
+}
+
+.panel h1 {
+  font-family: var(--k-display);
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.panel__lead {
+  max-width: 46ch;
+  color: var(--k-muted);
+}
+
+/* What Pak Erlangga says: his face, and one or two lines. */
+.says {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.says p {
+  color: var(--k-muted);
+}
+
+.says strong {
+  color: var(--k-text);
+  font-weight: 600;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+}
+
+/* The parts of his portrait that are only shown while he gestures (see base.css in the game). */
+.avatar * {
+  transform-box: view-box;
+}
+
+.avatar__hand {
+  transform: translateY(40px);
+}
+
+.avatar__mouth,
+.avatar__cheeks {
+  opacity: 0;
+}
+
+/* The morning's news, when there is any. */
+.news {
+  padding: 12px 16px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-radius);
+  background: var(--k-panel);
+}
+
+.news strong {
+  display: block;
+  font-weight: 600;
+}
+
+.news p {
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+/* --- Choices: one row each, the control on the right ------------------------------ */
+
+.choices {
+  display: grid;
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
+  padding-block: 10px;
+  border-top: 1px solid var(--k-line);
+}
+
+.choice:last-child {
+  border-bottom: 1px solid var(--k-line);
+}
+
+.choice__label {
+  font-weight: 600;
+}
+
+.choice__note {
+  grid-column: 1 / -1;
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+.stepper {
+  display: inline-grid;
+  grid-template-columns: 44px auto 44px;
+  align-items: center;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-pill);
+  background: var(--k-raise);
+  overflow: hidden;
+}
+
+.stepper__btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    transform 90ms var(--k-ease);
+}
+
+.stepper__btn:active:not(:disabled) {
+  transform: scale(0.9);
+}
+
+.stepper__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.stepper__value {
+  min-width: 6.5ch;
+  padding-inline: 4px;
+  font-size: 1.0625rem;
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .stepper__btn:hover:not(:disabled) {
+    background: var(--k-line);
+  }
+}
+
+/* --- Sums: what the morning costs, what the day brought ----------------------------- */
+
+.sums {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: var(--k-radius);
+  background: var(--k-panel);
+}
+
+.sums div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.sums dt {
+  color: var(--k-muted);
+}
+
+.sums dd {
+  font-family: var(--k-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sums__total {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--k-line);
+}
+
+/* Three figures side by side: what the morning comes down to. */
+.sums--across {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 12px 16px;
+}
+
+.sums--across div {
+  display: grid;
+  gap: 2px;
+  padding-inline: 16px;
+}
+
+.sums--across div:first-child {
+  padding-left: 0;
+}
+
+.sums--across div + div {
+  border-left: 1px solid var(--k-line);
+}
+
+.sums--across dt {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.sums--across dd {
+  text-align: left;
+}
+
+/* The button that moves the day on, kept at the bottom of the window with what it depends on. */
+.panel__go {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px 0 16px;
+  background: linear-gradient(to bottom, transparent, var(--k-bg) 22%);
+}
+
+/* --- Under the stall: the hours, or the marks ------------------------------------- */
+
+.under:empty {
+  display: none;
+}
+
+.hours {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.hours figcaption {
+  font-weight: 600;
+}
+
+.hours p {
+  max-width: 62ch;
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart__base {
+  stroke: var(--k-line);
+  stroke-width: 1;
+}
+
+.chart__bar {
+  fill: var(--k-lamp);
+}
+
+.chart__bar--over {
+  fill: var(--k-bad);
+}
+
+.chart__line {
+  stroke: var(--k-text);
+  stroke-width: 2;
+  stroke-dasharray: 7 6;
+}
+
+.chart__tick {
+  fill: var(--k-muted);
+  font-family: var(--k-mono);
+  font-size: 12px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 8px;
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sums__total dt {
+  color: var(--k-text);
+  font-weight: 600;
+}
+
+.sums__total dd {
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+
+/* --- Buttons: pills ----------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-pill);
+  background: transparent;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 160ms var(--k-ease),
+    background-color 160ms ease;
+}
+
+.btn:active {
+  transform: scale(0.97);
+  transition-duration: 90ms;
+}
+
+.btn--main {
+  min-height: 56px;
+  border-color: transparent;
+  background: var(--k-lamp);
+  color: var(--k-on-lamp);
+  font-size: 1.0625rem;
+}
+
+.btn--wide {
+  width: 100%;
+}
+
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    background: var(--k-raise);
+  }
+
+  .btn--main:hover {
+    background: #ffd166;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.problem {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--k-bad);
+}
+
+/* --- Midday: the counts ---------------------------------------------------------- */
+
+.counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.count {
+  display: grid;
+  gap: 2px;
+  padding: 14px 0;
+  border-top: 1px solid var(--k-line);
+}
+
+.count:nth-child(odd) {
+  padding-right: 16px;
+}
+
+.count:nth-child(even) {
+  padding-left: 16px;
+  border-left: 1px solid var(--k-line);
+}
+
+.count dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+.count dd {
+  font-family: var(--k-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.count--wide {
+  grid-column: 1 / -1;
+  padding-inline: 0 !important;
+  border-left: 0 !important;
+}
+
+.count small {
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+/* The color of each ending, the same as on the figures in the scene. */
+.mark {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.mark--served {
+  background: var(--outcome-served);
+}
+
+.mark--reneged {
+  background: var(--outcome-reneged);
+}
+
+.mark--balked {
+  background: var(--outcome-balked);
+}
+
+.mark--soldout {
+  background: var(--outcome-soldout);
+}
+
+/* One of a few: the speeds. */
+.speeds {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--k-line);
+  border-radius: var(--k-pill);
+}
+
+.speeds button {
+  min-width: 48px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--k-pill);
+  background: transparent;
+  font-family: var(--k-mono);
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.speeds button[aria-pressed='true'] {
+  background: var(--k-text);
+  color: var(--k-bg);
+}
+
+/* --- Evening: the result --------------------------------------------------------- */
+
+.result {
+  display: grid;
+  gap: 4px;
+}
+
+.result__label {
+  font-size: 0.9375rem;
+  color: var(--k-muted);
+}
+
+.result__amount {
+  font-family: var(--k-display);
+  font-size: clamp(2.75rem, 5.2vw, 4rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* How the day's customers ended, as one line of four lengths. */
+.flow {
+  display: flex;
+  gap: 3px;
+  height: 10px;
+}
+
+.flow span {
+  min-width: 3px;
+  border-radius: 3px;
+}
+
+.endings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  font-size: 0.9375rem;
+}
+
+.endings li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.endings b {
+  font-family: var(--k-mono);
+  font-weight: 500;
+}
+
+.endings span:last-child {
+  color: var(--k-muted);
+}
+
+/* What cost the most, in one block. */
+.why {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-left: 0;
+  border-radius: var(--k-radius);
+  background: var(--k-raise);
+}
+
+.why__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.why h2 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.why p {
+  font-size: 0.875rem;
+  color: var(--k-muted);
+}
+
+/* --- The front: the title large, and the three parts of a day under the fold --------- */
+
+.panel--home {
+  gap: 20px;
+  padding-top: clamp(0px, 4vw, 48px);
+}
+
+.panel--home h1 {
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 800;
+}
+
+.acts {
+  max-width: 1400px;
+  margin-inline: auto;
+  padding: 0 var(--k-gutter) 96px;
+}
+
+.acts h2 {
+  margin-bottom: 24px;
+  font-family: var(--k-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.acts__list {
+  display: grid;
+  gap: 24px;
+}
+
+.acts__list li {
+  padding-top: 16px;
+  border-top: 1px solid var(--k-line);
+}
+
+.acts__list h3 {
+  margin-bottom: 4px;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--k-lamp);
+}
+
+.acts__list p {
+  max-width: 36ch;
+  color: var(--k-muted);
+}
+
+@media (min-width: 720px) {
+  /* Wider toward the right, like a day that fills up. */
+  .acts__list {
+    grid-template-columns: 1fr 1.2fr 1fr;
+    gap: 32px;
+  }
+}
+
+/* --- Changing from one part of the day to the next ---------------------------------- */
+
+.panel > * {
+  animation: arrive 320ms var(--k-ease) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+}

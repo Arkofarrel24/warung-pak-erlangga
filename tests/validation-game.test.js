@@ -74,8 +74,8 @@ test('the model uses every purchase and decision', () => {
     { time: 6, servers: 2 },
     { time: 9, servers: 3 },
   ]);
-  // Price factor e^(-2,500/7,000) times reputation factor 0.4 + 1.2 x 0.72.
-  const factor = Math.exp(-2500 / 7000) * (0.4 + 1.2 * 0.72);
+  // Price factor e^(-2,500/5,000) times reputation factor 0.4 + 1.2 x 0.72.
+  const factor = Math.exp(-2500 / 5000) * (0.4 + 1.2 * 0.72);
   assert.ok(Math.abs(model.arrivalProfile[4].rate - 32 * factor) < 1e-9);
 });
 

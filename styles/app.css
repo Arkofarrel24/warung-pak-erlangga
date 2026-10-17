@@ -93,6 +93,10 @@
   text-decoration: none;
 }
 
+.brand__name {
+  white-space: nowrap;
+}
+
 .brand__icon {
   width: 28px;
   height: 28px;
@@ -173,6 +177,8 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  /* A label of two words stays one label: the chip gives room before the words break. */
+  white-space: nowrap;
   color: var(--kapur-soft);
 }
 
@@ -354,17 +360,56 @@ main:focus {
   max-width: var(--content-max);
   margin-inline: auto;
   padding: var(--space-6) var(--gutter) var(--space-8);
-  animation: view-in var(--dur-view) var(--ease-out);
 }
 
 .view > * {
   min-width: 0;
 }
 
-@keyframes view-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+/*
+ * A new screen arrives a section at a time, top to bottom, each a moment
+ * after the one above it: the eye is led down the page instead of being
+ * handed all of it at once. Only the first few are held back, so the last
+ * of them is in place within half a second, and nothing waits for them:
+ * every control works from the first frame.
+ *
+ * Written with :where() so that it weighs nothing: a section with an
+ * entrance of its own (the receipt being printed, the surprise) keeps it.
+ */
+:where(.view) > :where(*) {
+  animation: rise-in var(--dur-view) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * var(--order, 0));
+}
+
+:where(.view) > :where(:nth-child(2)) {
+  --order: 1;
+}
+
+:where(.view) > :where(:nth-child(3)) {
+  --order: 2;
+}
+
+:where(.view) > :where(:nth-child(4)) {
+  --order: 3;
+}
+
+:where(.view) > :where(:nth-child(5)) {
+  --order: 4;
+}
+
+:where(.view) > :where(:nth-child(n + 6)) {
+  --order: 5;
+}
+
+@media (max-width: 959px) {
+  /*
+   * On a phone these two sections hold a bar pinned to the bottom of the
+   * window. Something that is moving cannot hold anything pinned to the
+   * window, so they are simply there.
+   */
+  .view--pagi > .desk,
+  .view--malam > .report {
+    animation: none;
   }
 }
 
@@ -531,11 +576,6 @@ main:focus {
   text-wrap: balance;
 }
 
-/* Said about the scene above, so it sits close under the line it follows. */
-.home__hero .stage__caption {
-  margin-top: calc(var(--space-2) - var(--space-5));
-}
-
 .home__hero .bubble__text {
   display: grid;
   gap: var(--space-2);
@@ -620,6 +660,8 @@ main:focus {
   .how__step {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
+    /* Each starts at the top, so the three titles are level however long the text under them runs. */
+    align-content: start;
     gap: var(--space-3);
     text-align: center;
   }
@@ -661,14 +703,6 @@ main:focus {
   height: 280px; /* set precisely by the scene once it knows its width */
 }
 
-.stage__caption {
-  margin-top: var(--space-4);
-  font-size: var(--text-sm);
-  color: var(--ink-soft);
-  text-align: center;
-  text-wrap: balance;
-}
-
 /* Pause or play, in the corner of the scene. */
 .stage__toggle {
   position: absolute;
@@ -701,6 +735,8 @@ main:focus {
 /* The title, the clock, and the scene are one thing: the day in progress. */
 .view--siang {
   gap: var(--space-4);
+  /* Nothing follows the legend, so the page ends close under it and the day fits one window. */
+  padding-block: var(--space-5) var(--space-5);
 }
 
 .stage__top {
@@ -743,6 +779,8 @@ main:focus {
   background: var(--kunyit);
   transform: scaleX(0);
   transform-origin: left;
+  /* It is set eight times a second; in between it keeps moving at the same rate. */
+  transition: transform 140ms linear;
 }
 
 .stage__closed {
@@ -865,6 +903,35 @@ main:focus {
 
 .segmented__input:checked + .segmented__label {
   background: var(--kunyit);
+}
+
+/*
+ * With a thumb, the choices are equally wide and the color under the chosen
+ * one is a block that slides from where it was to where it is going, so a
+ * change of speed is seen as one. It is moved by its transform alone (set in
+ * day-view.js): one thumb-width per place.
+ */
+.segmented--slide {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+
+.segmented__thumb {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(100% / var(--choices, 4));
+  background: var(--kunyit);
+  transition: transform 220ms var(--ease-out);
+}
+
+.segmented--slide .segmented__label {
+  position: relative;
+}
+
+.segmented--slide .segmented__input:checked + .segmented__label {
+  background: transparent;
 }
 
 .segmented__input:focus-visible + .segmented__label {
@@ -1110,6 +1177,17 @@ main:focus {
 .decision__help {
   font-size: var(--text-sm);
   color: var(--ink-soft);
+}
+
+/* A choice that is allowed and almost surely a mistake: said, not forbidden. */
+.decision__warn {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border) solid var(--kunyit-deep);
+  border-radius: var(--radius-sm);
+  background: var(--kunyit-soft);
+  font-size: var(--text-sm);
+  font-weight: 700;
 }
 
 .decision__help a {
@@ -2232,9 +2310,9 @@ main:focus {
   fill: var(--kunyit);
 }
 
-/* A star that has just been earned drops into its place. */
+/* A star that has just been earned drops into its place, a touch too far, and settles. */
 .piagam__star--landing {
-  animation: star-land 420ms var(--ease-out) both;
+  animation: star-land 460ms var(--ease-bounce) both;
 }
 
 @keyframes star-land {
@@ -2375,10 +2453,9 @@ main:focus {
   grid-template-columns: 76px minmax(0, 1fr);
   gap: var(--space-3);
   align-items: center;
-  font-size: var(--text-sm);
 }
 
-/* As tall as the round marks beside it, so the three texts start level. */
+/* As tall as the round marks beside it, so the texts start level. */
 .goal__stars {
   display: flex;
   align-items: center;
@@ -2405,26 +2482,34 @@ main:focus {
   background: var(--kunyit-soft);
 }
 
+/* The rule about tips carries a coin. */
+.goal__mark--coin {
+  background: var(--kunyit);
+}
+
 .goal__mark--warning {
   background: var(--sambal-soft);
   color: var(--sambal-text);
 }
 
-@media (min-width: 860px) {
-  /* Three rules, three columns, each under a dashed rule. */
-  .goal__rules {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-5);
-  }
+/*
+ * Four things worth knowing before the first day, as a short list: each a
+ * mark and one line. On a wide screen they stand two by two, read left to
+ * right like the lines of a menu, not as a second row of columns under the
+ * three steps above.
+ */
+.goal__rules {
+  width: 100%;
+  max-width: 820px;
+  margin-inline: auto;
+  padding-top: var(--space-5);
+  border-top: 2px dashed var(--line-soft);
+}
 
-  .goal__rules li {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    align-content: start;
-    padding-top: var(--space-4);
-    border-top: 2px dashed var(--line-soft);
-    text-align: center;
-    text-wrap: balance;
+@media (min-width: 720px) {
+  .goal__rules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4) var(--space-6);
   }
 }
 
@@ -2497,6 +2582,72 @@ main:focus {
 /* A surprise is louder than a piece of news. */
 .happened--surprise {
   background: var(--kunyit-soft);
+}
+
+/*
+ * During the day the note is not there until the clock reaches it. News
+ * rises into place; a surprise drops in a little askew, goes a touch past
+ * its size, and settles.
+ */
+.view--siang .happened {
+  animation: rise-in var(--dur-view) var(--ease-out) both;
+  /* Under the scene on a phone, inside its frame. */
+  margin: var(--space-3) auto;
+  box-shadow: none;
+}
+
+@media (min-width: 760px) {
+  /*
+   * On a wide screen it hangs over the sky in the middle of the scene,
+   * between Pak Erlangga's corner and the roof: nobody has to scroll to
+   * learn why the day has just changed.
+   */
+  .view--siang .happened {
+    position: absolute;
+    top: var(--space-3);
+    /* A little left of the middle, so it clears the roof whatever the width of the stall. */
+    inset-inline: 0 14%;
+    gap: 2px;
+    max-width: min(380px, 38%);
+    margin: 0 auto;
+    padding: var(--space-2) var(--space-4);
+    pointer-events: none;
+  }
+
+  .view--siang .happened__title {
+    font-size: var(--text-md);
+  }
+
+  .view--siang .happened__icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .view--siang .happened__text {
+    font-size: var(--text-xs);
+  }
+}
+
+.view--siang .happened--surprise {
+  animation: surprise-in 420ms both;
+}
+
+@keyframes surprise-in {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.92) rotate(-1.6deg);
+    animation-timing-function: var(--ease-out);
+  }
+
+  55% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.03) rotate(0.5deg);
+    animation-timing-function: var(--ease-in-out);
+  }
+
+  100% {
+    transform: none;
+  }
 }
 
 .news__title,
@@ -2998,13 +3149,6 @@ main:focus {
 
 .guide__head .section-title:focus {
   outline: none;
-}
-
-.goal__text {
-  max-width: 44ch;
-  font-size: var(--text-lg);
-  color: var(--ink-soft);
-  text-wrap: balance;
 }
 
 /* What is only looked up: three lists to open, close together. */
@@ -3545,7 +3689,36 @@ a.cal__day:active {
   transition:
     transform var(--dur-enter) var(--ease-out),
     width var(--dur-enter) var(--ease-out),
-    height var(--dur-enter) var(--ease-out);
+    height var(--dur-enter) var(--ease-out),
+    box-shadow var(--dur-enter) ease,
+    opacity var(--dur-enter) ease;
+}
+
+/*
+ * The tour opens where its first step is: the page dims and the card fades
+ * in, already in place. Only from the second step on do the light and the
+ * card travel (see data-placed in tour.js); before that they would fly in
+ * from the corner of the window they were created in.
+ */
+.tour:not([data-placed]) .tour__hole {
+  transition:
+    box-shadow var(--dur-enter) ease,
+    opacity var(--dur-enter) ease;
+}
+
+.tour:not([data-placed]) .tour__card {
+  transition: opacity var(--dur-enter) var(--ease-out);
+}
+
+@starting-style {
+  .tour__hole {
+    box-shadow: 0 0 0 200vmax rgb(42 27 18 / 0);
+    opacity: 0;
+  }
+
+  .tour__card {
+    opacity: 0;
+  }
 }
 
 .tour__card {
@@ -3561,7 +3734,9 @@ a.cal__day:active {
   background: var(--surface);
   color: var(--ink);
   box-shadow: var(--lip-lg) var(--ink);
-  transition: transform var(--dur-enter) var(--ease-out);
+  transition:
+    transform var(--dur-enter) var(--ease-out),
+    opacity var(--dur-enter) var(--ease-out);
 }
 
 .tour__head {
@@ -3686,6 +3861,18 @@ a.cal__day:active {
   }
 }
 
+/* The face of a coin, wherever one turns up: flying to the till, lying on the counter, in the tip jar. */
+.coin,
+.tip__coin,
+.toss__coin,
+.tipjar__coin,
+.legend__swatch--tip {
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe08a 0 30%, var(--kunyit) 31%);
+  box-shadow: inset 0 0 0 3px rgb(184 116 0 / 0.55);
+}
+
 /* A coin on its way to the till. It is placed by its transform alone. */
 .coin {
   position: fixed;
@@ -3695,10 +3882,6 @@ a.cal__day:active {
   width: 20px;
   height: 20px;
   margin: -10px 0 0 -10px;
-  border: var(--border) solid var(--ink);
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffe08a 0 30%, var(--kunyit) 31%);
-  box-shadow: inset 0 0 0 3px rgb(184 116 0 / 0.55);
   pointer-events: none;
   will-change: transform;
 }
@@ -3706,6 +3889,443 @@ a.cal__day:active {
 .coin--lost {
   background: radial-gradient(circle at 35% 30%, #f2a79b 0 30%, var(--sambal) 31%);
   box-shadow: inset 0 0 0 3px rgb(143 39 21 / 0.55);
+}
+
+/* --- Tips: coins on the counter, and the jar they are counted in --------------- */
+
+/* Laid exactly over the canvas; only the coins in it can be pressed. */
+.stage__coins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/*
+ * A coin on the counter. The button is a full tap target; the coin drawn in
+ * it is smaller, so that it sits on the counter top without hiding the faces
+ * on either side. It is put in place with left and top, which never change
+ * while it lies there, and keeps its transform for arriving and being pressed.
+ */
+.tip {
+  position: absolute;
+  width: var(--target);
+  height: var(--target);
+  margin: calc(var(--target) / -2) 0 0 calc(var(--target) / -2);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  /* It lands on the counter: up from below, a little past its size, and back. */
+  transition:
+    transform var(--dur-enter) var(--ease-bounce),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+@starting-style {
+  .tip {
+    opacity: 0;
+    transform: translateY(10px) scale(0.6);
+  }
+}
+
+/* Pressed, it gives at once; the press is what picks it up. */
+.tip:active {
+  transform: scale(0.88);
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-out);
+}
+
+.tip:focus-visible {
+  outline-offset: 0;
+  border-radius: 50%;
+}
+
+/* Not picked up in time: it goes quicker than it came, and without the bounce. */
+.tip--gone {
+  opacity: 0;
+  transform: translateY(5px) scale(0.85);
+  transition-duration: 140ms;
+  transition-timing-function: var(--ease-out);
+  pointer-events: none;
+}
+
+.tip__coin {
+  position: absolute;
+  inset: 6px;
+  display: grid;
+  place-items: center;
+  /* Over the inner rim shared by every coin, a lip like the one under a button. */
+  box-shadow:
+    inset 0 0 0 3px rgb(184 116 0 / 0.55),
+    var(--lip-sm) var(--ink);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tip:hover .tip__coin {
+    transform: translateY(-2px);
+  }
+}
+
+/* How long it will still lie there: a ring that runs out, starting from the top. */
+.tip__timer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.tip__track,
+.tip__ring {
+  fill: none;
+  stroke-linecap: round;
+}
+
+/* A pale band under the ring, so it can be read against whatever the scene shows behind it. */
+.tip__track {
+  stroke: var(--surface);
+  stroke-width: 6;
+}
+
+.tip__ring {
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+/* Nearly gone: red, like a patience bar at the same point. */
+.tip--low .tip__ring {
+  stroke: var(--sambal);
+}
+
+/* While the day is paused the coins wait with it, and look it. */
+.stage__coins[data-frozen='true'] .tip {
+  cursor: default;
+  filter: grayscale(0.85);
+  opacity: 0.8;
+}
+
+@media (max-width: 559px) {
+  /* On a phone the whole warung is small: the coin is drawn smaller, and stays as easy to hit. */
+  .tip__coin {
+    inset: 8px;
+    font-size: 11px;
+    letter-spacing: -0.02em;
+  }
+
+  .tip__timer {
+    transform: rotate(-90deg) scale(0.84);
+  }
+}
+
+/* The coin Pak Erlangga points at while explaining: lit like the rest, and not for pressing. */
+.tip--sample {
+  pointer-events: none;
+}
+
+.stage__coins[data-frozen='true'] .tip--sample {
+  filter: none;
+  opacity: 1;
+}
+
+/* A coin thrown from the counter to the jar: the outer part crosses the screen, the inner part rises and falls. */
+.toss {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 800;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.toss__coin {
+  display: block;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  will-change: transform;
+}
+
+/*
+ * The tip jar: what has been picked up today. It stands at the end of the
+ * clock's row, where a game keeps its score, and like the reputation in the
+ * header it answers when asked: pressing it explains the coins again.
+ */
+.tipjar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: var(--border) solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--lip-sm) var(--ink);
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tipjar:hover {
+    background: var(--kunyit-soft);
+  }
+}
+
+.tipjar:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--ink);
+  transition-duration: var(--dur-press);
+}
+
+.tipjar__coin {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+/* The figure rolls up inside this when a coin lands (see roll() in motion.js). */
+.tipjar__clip {
+  display: inline-block;
+  overflow: hidden;
+}
+
+.tipjar__label {
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+/* Wide enough for a good day's tips, so the bar beside the jar never jumps. */
+.tipjar__amount {
+  display: inline-block;
+  min-width: 9ch;
+  font-weight: 500;
+  text-align: right;
+}
+
+.tipjar__hint {
+  width: 1em;
+  height: 1em;
+  color: var(--ink-soft);
+}
+
+.legend__swatch--tip {
+  width: 16px;
+  height: 16px;
+  border-width: 1.5px;
+  box-shadow: inset 0 0 0 2px rgb(184 116 0 / 0.55);
+}
+
+@media (max-width: 559px) {
+  /* The clock takes the first line; the bar of the day and the jar share the second. */
+  .stage__top {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+  }
+
+  .stage__time {
+    flex-basis: 100%;
+  }
+}
+
+/* --- The day's challenge -------------------------------------------------------- */
+
+/* One line: the goal, and what meeting it is worth. On the report it also says how it went. */
+.challenge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  justify-self: center;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-4);
+  border: var(--border) dashed var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.challenge__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--kunyit-soft);
+}
+
+.challenge__mark .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.challenge__prize {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--kunyit-soft);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.challenge--met {
+  border-style: solid;
+  border-color: var(--daun-text);
+  background: var(--daun-soft);
+}
+
+.challenge--met .challenge__mark {
+  background: var(--daun);
+  color: var(--krem);
+}
+
+.challenge--met .challenge__prize {
+  background: var(--surface);
+  color: var(--daun-text);
+}
+
+/* A stamp on the calendar for a challenge met: bottom corner, clear of the event and the rent pins. */
+.cal__cap {
+  position: absolute;
+  right: 3px;
+  bottom: -8px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: var(--border) solid var(--ink);
+  border-radius: 50%;
+  background: var(--daun);
+  color: var(--krem);
+}
+
+.cal__cap .icon {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3;
+}
+
+.piagam__caps {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: var(--daun-text);
+}
+
+/* --- Gauges: the queue as it stands this instant -------------------------------- */
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--border-thick) solid var(--ink);
+  background: var(--paper-deep);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.gauge {
+  display: grid;
+  grid-template-columns: auto minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.gauge__label {
+  white-space: nowrap;
+}
+
+.gauge__bar {
+  height: 10px;
+  overflow: hidden;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+
+.gauge__fill {
+  display: block;
+  height: 100%;
+  background: var(--outcome-served);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 140ms linear;
+}
+
+/* Every pegawai serving: the next customer has to wait. */
+.gauges[data-busy='full'] .gauge:first-child .gauge__fill {
+  background: var(--kunyit);
+}
+
+/* Somebody is about to give up: the color of a patience bar at the same point. */
+.gauges[data-patience='low'] .gauge:last-child .gauge__fill {
+  background: var(--sambal);
+}
+
+/* As wide as its longest reading, so the bar beside it does not jump. */
+.gauge__value {
+  min-width: 9.5em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 559px) {
+  .gauges {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: var(--space-3);
+  }
+
+  .gauge {
+    grid-template-columns: 7.5em minmax(40px, 1fr) auto;
+  }
+}
+
+/* --- What the customers said ---------------------------------------------------- */
+
+.reviews__list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 760px) {
+  .reviews__list {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+.review {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+}
+
+.review__words {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.review__who {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
 }
 
 /* --- Pak Erlangga in the corner of the scene ---------------------------------- */
@@ -3732,10 +4352,13 @@ a.cal__day:active {
 .stage__say {
   position: relative;
   transform-origin: left center;
-  /* It can be cut short by the next remark, so it is a transition, not a keyframe. */
+  /*
+   * It can be cut short by the next remark, so it is a transition, not a
+   * keyframe. It pops out of him a little past its size and settles.
+   */
   transition:
     opacity var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    transform var(--dur-enter) var(--ease-bounce);
   max-width: 190px;
   padding: var(--space-1) var(--space-3);
   border: var(--border) solid var(--ink);
@@ -3749,8 +4372,9 @@ a.cal__day:active {
 .stage__say[data-shown='false'] {
   opacity: 0;
   transform: scale(0.9);
-  /* Leaving is quicker than arriving. */
+  /* Leaving is quicker than arriving, and does not bounce. */
   transition-duration: 110ms;
+  transition-timing-function: var(--ease-out);
 }
 
 .stage__say::before {
@@ -3780,17 +4404,28 @@ a.cal__day:active {
 
 /* --- "Kenapa begini?": the day explained ---------------------------------------- */
 
+/*
+ * Read in a glance: the few things that cost the day most, each one name,
+ * one sentence, and one thing to try. The working behind them is at the
+ * bottom, for whoever wants to open it.
+ */
 .why {
   display: grid;
   gap: var(--space-4);
   width: 100%;
-  max-width: 860px;
+  max-width: 760px;
   margin-inline: auto;
 }
 
-.why__lead {
-  color: var(--ink-soft);
+.why__head {
+  display: grid;
+  gap: var(--space-1);
   text-align: center;
+}
+
+.why__lead {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
   text-wrap: balance;
 }
 
@@ -3802,14 +4437,10 @@ a.cal__day:active {
 .why__item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-3) var(--space-4);
+  gap: var(--space-2) var(--space-4);
   align-items: start;
-  padding-block: var(--space-5);
+  padding-block: var(--space-4);
   border-top: 2px dashed var(--line-soft);
-}
-
-.why__item:last-child {
-  padding-bottom: 0;
 }
 
 .why__icon {
@@ -3824,33 +4455,16 @@ a.cal__day:active {
 
 .why__body {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .why__body h3 {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
+  line-height: 1.25;
 }
 
-/* Its name in queueing theory, after the plain words. */
-.why__concept {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--ink-soft);
-}
-
-/* What could be tried: a note in the green of a good day, as wide as the text above it. */
-.why__advice {
-  margin-top: var(--space-1);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--daun-soft);
-  font-size: var(--text-sm);
-}
-
+/* What to try: said in the green of a good day, on a line of its own. */
+.why__tip strong,
 .why__advice strong {
   color: var(--daun-text);
 }
@@ -3878,14 +4492,59 @@ a.cal__day:active {
   font-weight: 800;
 }
 
+/* The smaller findings, folded away under the ones that matter. */
+.why__more {
+  margin-top: 0;
+  border-top: 2px dashed var(--line-soft);
+}
+
+.why__more .why__item:first-child {
+  border-top: 0;
+}
+
+.why__shop {
+  justify-self: center;
+}
+
+/* The working: the same findings in the words and letters of queueing theory. */
+.why__working {
+  margin-top: var(--space-2);
+}
+
+.why__proofs {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.why__proof {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.why__proof h3 {
+  font-size: var(--text-md);
+}
+
+/* Its name in queueing theory, after the plain words. */
+.why__concept {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
 @media (min-width: 720px) {
-  /* The third column is kept also where there is no price, so every text ends on one line. */
+  /* The price stands at the end of the line, level with the name of what it is the price of. */
   .why__item {
-    grid-template-columns: auto minmax(0, 1fr) 176px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .why__cost {
     grid-column: 3;
+    grid-row: 1;
     justify-self: end;
   }
 }

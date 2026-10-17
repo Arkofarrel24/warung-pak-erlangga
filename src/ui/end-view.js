@@ -5,7 +5,7 @@ import { stars, STATUS } from '../game/game.js';
 import { dayCalendar } from './calendar.js';
 import { createChartSet } from './charts.js';
 import { h, icon } from './dom.js';
-import { decimal, integer, percent, rupiah, signedRupiah } from './format.js';
+import { decimal, integer, percent, rupiah, signedRupiah, spokenRupiah } from './format.js';
 import { confetti, prefersReducedMotion } from './motion.js';
 import { avatar, bubble } from './pak-erlangga.js';
 import { trendsCard } from './report-view.js';
@@ -24,6 +24,9 @@ const STAR_GAP_MS = 420;
  * game, and room for a name. It is laid out to be kept, as a screenshot.
  */
 function certificate(store, { earned, facts, fresh }) {
+  // Days whose challenge was met, of the days that had one (a game saved before challenges has none).
+  const judged = store.game.history.filter((report) => report.challenge);
+  const caps = { met: judged.filter((report) => report.challenge.met).length, total: judged.length };
   const { game } = store;
   const won = game.status === STATUS.WON;
   const animate = fresh && !prefersReducedMotion();
@@ -87,6 +90,7 @@ function certificate(store, { earned, facts, fresh }) {
           ]),
         ),
       ),
+      caps.total > 0 && h('p', { class: 'piagam__caps', text: `Cap tantangan: ${integer(caps.met)} dari ${integer(caps.total)} hari` }),
       h('div', { class: 'piagam__sign' }, [
         avatar({ mood: won ? 'happy' : 'sad' }),
         h('p', {}, [h('strong', { text: 'Pak Erlangga' }), h('small', { text: 'pemilik lama' })]),
@@ -109,6 +113,7 @@ export function renderEnd(container, { store, startNewGame }) {
   const served = total(history, (report) => report.results.served);
   const reneged = total(history, (report) => report.results.reneged);
   const profit = total(history, (report) => report.ledger.profit);
+  const tips = total(history, (report) => report.ledger.tips ?? 0);
   const spent = total(history, (report) => report.ledger.purchases ?? 0);
   const best = history.reduce((top, report) => (report.ledger.profit > top.ledger.profit ? report : top), history[0]);
 
@@ -118,14 +123,14 @@ export function renderEnd(container, { store, startNewGame }) {
       `Kasnya habis di hari ke-${game.day}, jadi warung terpaksa tutup. Coba buka lagi laporan hari-hari terakhir: ` +
       'biasanya jawabannya ada di antrean, harga, atau stok.';
   } else if (earned === 3) {
-    words = `Empat belas hari, dan kasnya jadi ${rupiah(game.cash)}. Saya saja dulu tidak sepandai ini. Warungnya saya titipkan ke orang yang tepat!`;
+    words = `Empat belas hari, dan kasnya jadi ${spokenRupiah(game.cash)}. Saya saja dulu tidak sepandai ini. Warungnya saya titipkan ke orang yang tepat!`;
   } else if (earned === 2) {
-    words = `Empat belas hari, dan kasnya jadi ${rupiah(game.cash)}, lebih dari dua kali modal. Bagus! Sedikit lagi jadi juragan.`;
+    words = `Empat belas hari, dan kasnya jadi ${spokenRupiah(game.cash)}, lebih dari dua kali modal. Bagus! Sedikit lagi jadi juragan.`;
   } else {
     words =
-      `Empat belas hari, dan warungnya masih berdiri dengan kas ${rupiah(game.cash)}. ` +
-      (game.cash >= START.cash ? 'Selamat, tapi' : 'Selamat, walau kasnya menyusut. Dan') +
-      ' warung ini bisa lebih dari sekadar bertahan. Coba lagi dengan pegawai, harga, atau stok yang berbeda.';
+      `Empat belas hari, dan warungnya masih berdiri dengan kas ${spokenRupiah(game.cash)}. ` +
+      (game.cash >= START.cash ? 'Selamat! ' : 'Selamat, walau kasnya menyusut. ') +
+      'Warung ini masih bisa untung lebih banyak. Coba lagi dengan pegawai, harga, atau stok yang berbeda.';
   }
 
   const heading = h('h1', { id: 'view-title', tabindex: '-1', text: won ? 'Warung bertahan' : 'Warung tutup' });
@@ -148,17 +153,23 @@ export function renderEnd(container, { store, startNewGame }) {
               ? `modal ${rupiah(START.cash)} + laba − belanja toko ${rupiah(spent)}`
               : `modal awal ${rupiah(START.cash)}`,
           ],
-          ['Laba bersih', signedRupiah(profit), `hari terbaik: hari ke-${best.day}, ${signedRupiah(best.ledger.profit)}`],
+          // The profit of the fourteen days of selling: what was bought next door is not in it.
+          [
+            'Laba dari jualan',
+            signedRupiah(profit),
+            [tips > 0 && `termasuk tip ${rupiah(tips)}`, spent > 0 && 'belum dikurangi belanja toko', `hari terbaik: hari ke-${best.day}`]
+              .filter(Boolean)
+              .join(', '),
+          ],
           ['Reputasi', decimal(game.reputation, 0), 'dari 100, mulai dari 50'],
           [
             'Pelanggan dilayani',
             integer(served),
-            `${percent(arrivals > 0 ? served / arrivals : 0)} dari ${integer(arrivals)} yang datang; ${integer(reneged)} batal antre`,
+            `${percent(arrivals > 0 ? served / arrivals : 0)} dari ${integer(arrivals)} yang datang, ${integer(reneged)} batal antre`,
           ],
         ],
       }),
-      dayCalendar(game),
-      trendsCard(history, charts),
+      // What to do next comes right under the certificate, where the line about the next star has just been read.
       h('div', { class: 'report__next' }, [
         h('a', { class: 'btn', href: `#/laporan/${history.length}` }, [icon('book'), 'Buka laporan hari terakhir']),
         // On paper, or as a PDF, the page is the certificate alone (see the print rules in app.css).
@@ -168,6 +179,8 @@ export function renderEnd(container, { store, startNewGame }) {
           'Main lagi',
         ]),
       ]),
+      dayCalendar(game),
+      trendsCard(history, charts),
     ]),
   );
   charts.mount();

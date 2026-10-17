@@ -89,6 +89,11 @@ const SOUNDS = {
     { from: 1976, at: 0, length: 0.07, level: 0.16, wave: 'triangle' },
     { from: 2637, at: 0.05, length: 0.16, level: 0.16, wave: 'triangle' },
   ],
+  /** A tip is picked up from the counter: higher and shorter than the till. */
+  tip: [
+    { from: 2349, at: 0, length: 0.06, level: 0.18, wave: 'triangle' },
+    { from: 3136, at: 0.045, length: 0.2, level: 0.18, wave: 'triangle' },
+  ],
   /** The printer feeds out one line of the receipt. */
   print: [{ from: 180, to: 140, at: 0, length: 0.05, level: 0.1, wave: 'square' }],
   /** The rolling door of the warung: a rattle of slats. */
@@ -116,7 +121,7 @@ const SOUNDS = {
  * lunch peak several customers are served every second, and sped up four
  * times the till would only buzz; this way it rings now and then instead.
  */
-const MIN_GAP = { sale: 0.3, renege: 0.4, balk: 0.4, soldOut: 0.6, coin: 0.05, print: 0.04 };
+const MIN_GAP = { sale: 0.3, renege: 0.4, balk: 0.4, soldOut: 0.6, coin: 0.05, tip: 0.04, print: 0.04 };
 const DEFAULT_GAP = 0.09;
 
 /** How long after being asked a sound may still start, in seconds, when the audio had to be woken first. */

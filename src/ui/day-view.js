@@ -4,21 +4,29 @@
  * What is shown is the day itself, not a replay of it: the simulation that
  * decides the day's result is advanced event by event while it is drawn.
  * Pausing, speeding up, or skipping changes only how fast it is watched.
- * The result is the same either way, because every random number of the day
+ * The queue is the same either way, because every random number of the day
  * is fixed by the game's seed and the day number.
+ *
+ * One thing does depend on the watching: the tips. Customers who were served
+ * at once sometimes leave a coin on the counter, and it counts only if the
+ * player picks it up before it is gone (see tip-coins.js). Which customers
+ * leave one is fixed like everything else; picking it up is the player's part.
  */
 
-import { DAY } from '../game/config.js';
+import { DAY, TIPS } from '../game/config.js';
 import { EVENT_KIND } from '../game/events.js';
 import { ARRIVAL_OUTCOME, EVENT } from '../sim/engine.js';
+import { confirmDialog } from './controls.js';
 import { h, icon } from './dom.js';
 import { clock as clockText, compact, decimal, integer, rupiah } from './format.js';
-import { flash, pop, prefersReducedMotion } from './motion.js';
+import { bounce, flash, pop, prefersReducedMotion, roll, swapIn, tossCoin } from './motion.js';
 import { avatar, gesture } from './pak-erlangga.js';
 import { PHASE, phaseAt, phaseName, setPhase } from './phase.js';
 import { createScenePlayer } from './scene-player.js';
 import { play } from './sound.js';
 import { EVENT_TEXT, pick } from './text.js';
+import { createTipCoins } from './tip-coins.js';
+import { startTour } from './tour.js';
 import { WarungScene } from './warung-scene.js';
 
 /** At normal speed an hour of the day takes six seconds, a whole day a little over a minute. */
@@ -33,6 +41,10 @@ const REMARK_GAP_MS = 3500;
 const REMARK_SHOWN_MS = 2400;
 /** He claps once for every this many portions sold. */
 const SALES_PER_CLAP = 12;
+/** After the first coin he is glad of every this many more. */
+const TIPS_PER_CLAP = 6;
+/** How long the first coin lies on the counter before he explains it: long enough to be seen landing. */
+const GUIDE_DELAY_MS = 350;
 
 /** What he says, and does, about what happens at the warung while he watches. */
 const REMARKS = Object.freeze({
@@ -47,6 +59,8 @@ const REMARKS = Object.freeze({
   gasOut: ['scratch', ['Gasnya habis...']],
   viral: ['cheer', ['Warungnya viral!']],
   helper: ['cheer', ['Keponakan saya datang!']],
+  tip: ['clap', ['Rezeki!', 'Lumayan, buat jajan!', 'Tip masuk!']],
+  tipMissed: ['scratch', ['Koinnya keburu hilang...']],
 });
 
 /** The wash of color over a count on the board when a customer is lost that way. */
@@ -77,7 +91,7 @@ function revealTime(event) {
 }
 
 export function renderDay(container, { store, activeDay, completeDay }) {
-  const { simulation, decisions, model, event } = activeDay;
+  const { simulation, decisions, model, event, tips: jar } = activeDay;
   const maxServers = model.servers ?? Math.max(...model.staffSchedule.map((entry) => entry.servers));
   const reducedMotion = prefersReducedMotion();
 
@@ -88,6 +102,24 @@ export function renderDay(container, { store, activeDay, completeDay }) {
   const phase = h('span', { class: 'chip', text: 'Pagi' });
   const progress = h('span', { class: 'stage__progress-fill' });
   const closedNote = h('p', { class: 'stage__closed', hidden: true }, [icon('moon'), 'Warung tutup. Menghitung kas…']);
+
+  // --- Tips -------------------------------------------------------------------
+
+  // The jar shows what has been picked up today, and explains the coins when pressed.
+  const jarCoin = h('span', { class: 'tipjar__coin', 'aria-hidden': 'true' });
+  const jarAmount = h('span', { class: 'tipjar__amount num', text: rupiah(0) });
+  const jarButton = h('button', { type: 'button', class: 'tipjar', title: 'Cara memungut tip' }, [
+    jarCoin,
+    h('span', { class: 'tipjar__label', text: 'Tip' }),
+    h('span', { class: 'tipjar__clip' }, jarAmount),
+    h('span', { class: 'sr-only', text: ', terkumpul hari ini. Cara memungut tip' }),
+    icon('info', 'icon tipjar__hint'),
+  ]);
+  const coinLayer = h('div', { class: 'stage__coins' });
+  /** What the jar shows: a coin counts once it has landed in it. */
+  let tipsLanded = 0;
+  let tipsTaken = 0;
+  let tipMissed = false;
 
   // --- Pak Erlangga, watching -------------------------------------------------
 
@@ -115,6 +147,12 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     remarkTimer = window.setTimeout(() => {
       hostSays.dataset.shown = 'false';
     }, REMARK_SHOWN_MS);
+  }
+
+  /** The warung is open: he says so, and the pegawai behind the counter hop to it. */
+  function greet() {
+    remark('open', true);
+    if (!reducedMotion) scene.greet();
   }
 
   /** What he makes of one event of the simulation. */
@@ -154,8 +192,15 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     h('input', { type: 'radio', name: 'pace', id: `pace-${pace}`, value: pace, class: 'segmented__input', checked: pace === startPace }),
   );
   const paceLabel = (pace) => `${decimal(pace, pace < 1 ? 1 : 0)}×`;
-  const paceControl = h('fieldset', { class: 'segmented' }, [
+  // The block of color under the chosen speed: it slides from the old choice to the new one.
+  const paceThumb = h('span', { class: 'segmented__thumb', 'aria-hidden': 'true' });
+  const movePaceThumb = (pace) => {
+    paceThumb.style.transform = `translateX(${PACES.indexOf(pace) * 100}%)`;
+  };
+  movePaceThumb(startPace);
+  const paceControl = h('fieldset', { class: 'segmented segmented--slide', style: `--choices: ${PACES.length}` }, [
     h('legend', { class: 'sr-only', text: 'Kecepatan' }),
+    paceThumb,
     ...PACES.map((pace, i) => [paceInputs[i], h('label', { class: 'segmented__label', for: `pace-${pace}`, text: paceLabel(pace) })]),
   ]);
   const skipButton = h('button', { type: 'button', class: 'btn' }, [h('span', { text: 'Langsung ke laporan' }), icon('chevron-right')]);
@@ -183,12 +228,76 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     revenue: tally('revenue', 'Uang masuk'),
   };
 
+  // --- Gauges ---------------------------------------------------------------
+
+  // Two readings of the queue as it stands this instant, taken straight from
+  // the engine's state: how many of the pegawai on duty are serving (the
+  // utilization ρ at this moment), and how much patience the least patient
+  // waiting customer has left. Nothing is estimated.
+  const busyFill = h('span', { class: 'gauge__fill' });
+  const busyValue = h('span', { class: 'gauge__value num' });
+  const patienceFill = h('span', { class: 'gauge__fill' });
+  const patienceValue = h('span', { class: 'gauge__value num' });
+  const gauge = (label, fill, value) =>
+    h('div', { class: 'gauge' }, [
+      h('span', { class: 'gauge__label', text: label }),
+      h('span', { class: 'gauge__bar', 'aria-hidden': 'true' }, fill),
+      value,
+    ]);
+  const gauges = h('div', { class: 'gauges', 'aria-label': 'Keadaan warung saat ini' }, [
+    gauge('Pegawai sibuk', busyFill, busyValue),
+    gauge('Sabar terpendek', patienceFill, patienceValue),
+  ]);
+
+  function renderGauges(now) {
+    const { staff, busyServers } = simulation;
+    const rho = staff > 0 ? Math.min(busyServers / staff, 1) : 0;
+    busyFill.style.transform = `scaleX(${rho})`;
+    busyValue.textContent = `${integer(busyServers)} dari ${integer(staff)}`;
+    gauges.dataset.busy = rho >= 1 ? 'full' : 'room';
+
+    // The least patient of those waiting: the share of their own patience still left.
+    let least = null;
+    for (const customer of simulation.line.peek(simulation.line.length)) {
+      if (!Number.isFinite(customer.patience)) continue;
+      const left = Math.min(Math.max(1 - (now - customer.arrivalTime) / customer.patience, 0), 1);
+      if (least === null || left < least) least = left;
+    }
+    patienceFill.style.transform = `scaleX(${least ?? 1})`;
+    patienceValue.textContent = least === null ? 'tidak ada antrean' : `sisa ${integer(Math.round(least * 100))}%`;
+    gauges.dataset.patience = least !== null && least < 0.25 ? 'low' : 'fine';
+  }
+
   const scene = new WarungScene(canvas, {
     seats: decisions.seats,
     maxServers,
     priceLabel: `+${compact(decisions.price / 1000)} rb`,
     // On a rainy day it really rains.
     weather: event?.id === 'rain' ? 'rain' : null,
+  });
+
+  const coins = createTipCoins({
+    layer: coinLayer,
+    jar,
+    scene,
+    clock: () => player.clock,
+    onTake(amount, from) {
+      play('tip');
+      tipsTaken += 1;
+      if (tipsTaken === 1 || tipsTaken % TIPS_PER_CLAP === 0) remark('tip');
+      // The coin is thrown to the jar, and is counted when it lands there.
+      tossCoin(from, jarCoin, () => {
+        tipsLanded += amount;
+        jarAmount.textContent = rupiah(tipsLanded);
+        roll(jarAmount, 1);
+        bounce(jarButton);
+      });
+    },
+    onMiss() {
+      // He says it once; after that the empty spot on the counter says it.
+      if (!tipMissed) remark('tipMissed');
+      tipMissed = true;
+    },
   });
 
   // --- The day's event --------------------------------------------------------
@@ -212,13 +321,14 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     );
     banner.hidden = false;
     if (surprise) {
-      pop(banner);
       play('surprise');
       if (event.id in REMARKS) remark(event.id, true);
     }
   }
 
   let lastHud = 0;
+  /** False until the counts have been drawn once: what they start at is not a change. */
+  let hudDrawn = false;
   let completed = false;
   let closingTimer = null;
   /** True while the rest of the day is being run at once: nothing of it is seen or heard. */
@@ -229,7 +339,14 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     const { arrivals, served, reneged, rejected, soldOut } = simulation.results;
     const now = Math.min(player.clock, simulation.clock);
     clockValue.textContent = clockText(player.clock);
-    phase.textContent = simulation.closed ? 'Tutup' : phaseName(now);
+    renderGauges(now);
+    const part = simulation.closed ? 'Tutup' : phaseName(now);
+    if (part !== phase.textContent) {
+      // The part of the day turns over five times: each time the chip says so.
+      phase.textContent = part;
+      if (hudDrawn) pop(phase);
+    }
+    hudDrawn = true;
     // The header takes the light of the hour on the clock.
     setPhase(simulation.closed ? PHASE.NIGHT : phaseAt(now));
     progress.style.transform = `scaleX(${Math.min(player.clock / DAY.hours, 1)})`;
@@ -243,8 +360,14 @@ export function renderDay(container, { store, activeDay, completeDay }) {
   }
 
   function renderPlayButton() {
-    playButton.replaceChildren(icon(player.playing ? 'pause' : 'play'), playLabel);
-    playLabel.textContent = player.playing ? 'Jeda' : 'Putar';
+    const label = player.playing ? 'Jeda' : 'Putar';
+    const changed = playLabel.textContent !== '' && playLabel.textContent !== label;
+    const mark = icon(player.playing ? 'pause' : 'play');
+    playButton.replaceChildren(mark, playLabel);
+    playLabel.textContent = label;
+    if (changed) swapIn(mark);
+    // A paused day keeps its coins where they are, out of reach.
+    coins.setFrozen(!player.playing);
   }
 
   function complete() {
@@ -259,13 +382,22 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     scene,
     hoursPerSecond: HOURS_PER_SECOND,
     onRecord: (record) => {
-      // What is skipped is neither heard nor remarked on.
+      // What is skipped is neither heard nor remarked on, and leaves no coin to pick up.
       if (skipping) return;
       const sound = soundOf(record);
       if (sound) play(sound);
       watch(record);
+      if (record.type === EVENT.DEPARTURE) {
+        const coin = jar.leave(record.customer, record.time);
+        if (coin) {
+          coins.drop(coin, record.serverIndex);
+          // The first coin ever: he explains it while it lies there, once it has landed.
+          if (!store.prefs.tipTourSeen && guideTimer === null) guideTimer = window.setTimeout(() => showTipGuide(), GUIDE_DELAY_MS);
+        }
+      }
     },
     onFrame: () => {
+      coins.frame();
       const now = performance.now();
       if (now - lastHud < HUD_INTERVAL_MS) return;
       lastHud = now;
@@ -289,25 +421,116 @@ export function renderDay(container, { store, activeDay, completeDay }) {
     input.addEventListener('change', () => {
       if (!input.checked) return;
       player.setPace(Number(input.value));
+      movePaceThumb(Number(input.value));
       store.setPrefs({ pace: Number(input.value) });
     }),
   );
-  skipButton.addEventListener('click', () => {
+  skipButton.addEventListener('click', async () => {
+    // Coins lying on the counter would be left behind: said before they are.
+    if (coins.count > 0 && !simulation.finished) {
+      const wasPlaying = player.playing;
+      player.pause();
+      renderPlayButton();
+      const agreed = await confirmDialog({
+        title: 'Tinggalkan koinnya?',
+        body: `Masih ada ${coins.count} koin tip di konter. Kalau langsung ke laporan, koin itu hangus.`,
+        confirmLabel: 'Ke laporan',
+        cancelLabel: 'Pungut dulu',
+      });
+      if (!agreed) {
+        if (wasPlaying) player.play();
+        renderPlayButton();
+        return;
+      }
+    }
+    if (completed) return;
     skipping = true;
+    // The coins still on the counter are left behind with the rest of the day.
+    coins.clear();
     player.skip();
     complete();
   });
 
+  /**
+   * On a wide screen the whole day fits the window: the scene gives up
+   * height until the clock above it and the legend below it are both in
+   * sight. A phone scrolls anyway, and keeps the scene as tall as it is wide.
+   */
+  function fitWindow() {
+    const view = canvas.closest('.view');
+    if (!view) return;
+    if (window.innerWidth < 760) {
+      scene.limitHeight(360);
+      return;
+    }
+    const around = view.getBoundingClientRect().bottom + window.scrollY - canvas.clientHeight;
+    scene.limitHeight(window.innerHeight - around);
+  }
+
   const observer = new ResizeObserver(() => {
+    fitWindow();
     scene.resize();
     player.redraw();
+    coins.reposition();
   });
+  window.addEventListener('resize', fitWindow);
+
+  // T picks up the coin that has lain longest: the same one press per coin, without having to aim.
+  function onKey(event) {
+    if (event.key.toLowerCase() !== 't' || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.target.closest?.('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
+    if (coins.takeOldest()) event.preventDefault();
+  }
+  document.addEventListener('keydown', onKey);
+
+  // --- The guide to the coins ---------------------------------------------------
+
+  let tour = null;
+  let guideTimer = null;
+
+  /**
+   * Pak Erlangga explains the coins, pointing at one: the first coin a
+   * customer leaves, the first time, and a sample when he is asked again
+   * with the counter empty. The day waits while he does, and goes on
+   * afterwards if it was running.
+   */
+  function showTipGuide({ thenPlay = player.playing } = {}) {
+    if (tour || completed || simulation.finished) return;
+    player.pause();
+    renderPlayButton();
+    const sample = coins.point() ?? coins.sample();
+    const withKeys = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    tour = startTour(
+      [
+        {
+          target: sample.element,
+          title: 'Koin tip',
+          text:
+            `Pelanggan yang langsung dilayani kadang meninggalkan koin ${rupiah(TIPS.amount)} di konter. ` +
+            `Pencet sebelum cincinnya habis${withKeys ? ', atau tekan T' : ''}. ` +
+            'Selagi dijeda koin tidak bisa dipungut, dan kalau harinya dilewati koinnya hangus.',
+        },
+      ],
+      {
+        onEnd: () => {
+          tour = null;
+          sample.remove();
+          store.setPrefs({ tipTourSeen: true });
+          if (thenPlay && !simulation.finished) player.play();
+          renderPlayButton();
+          jarButton.focus({ preventScroll: true });
+        },
+      },
+    );
+  }
+  jarButton.addEventListener('click', () => showTipGuide());
 
   // --- Page -----------------------------------------------------------------
 
   const heading = h('h1', { id: 'view-title', tabindex: '-1', text: 'Warung sedang buka' });
   const legendItem = (className, text) =>
     h('span', { class: 'legend__item' }, [h('span', { class: `legend__swatch ${className}`, 'aria-hidden': 'true' }), text]);
+  const controls = h('div', { class: 'stage__controls' }, [playButton, paceControl, skipButton]);
 
   container.append(
     h('section', { class: 'view view--siang', 'aria-labelledby': 'view-title' }, [
@@ -316,20 +539,23 @@ export function renderDay(container, { store, activeDay, completeDay }) {
         h('div', { class: 'stage__top' }, [
           h('div', { class: 'stage__time' }, [h('span', { class: 'sr-only', text: 'Jam ' }), clockValue, phase]),
           h('div', { class: 'stage__progress', 'aria-hidden': 'true' }, progress),
+          jarButton,
         ]),
         h('div', { class: 'stage__frame' }, [
-          h('div', { class: 'stage__view' }, [canvas, hostCorner, closedNote]),
+          // The day's event is pinned over the sky, in sight when it strikes.
+          h('div', { class: 'stage__view' }, [canvas, coinLayer, banner, hostCorner, closedNote]),
+          gauges,
           h('dl', { class: 'tally', 'aria-label': 'Hitungan sejauh ini' }, Object.values(tallies).map((item) => item.element)),
         ]),
-        h('div', { class: 'stage__controls' }, [playButton, paceControl, skipButton]),
+        controls,
         h('p', { class: 'legend legend--center' }, [
+          legendItem('legend__swatch--tip', 'koin di konter: pencet untuk memungut tip'),
           legendItem('legend__swatch--patience', 'batang di atas kepala: sisa kesabaran'),
           legendItem('legend__swatch--ring', 'cincin: sedang dilayani'),
           legendItem('legend__swatch--angry', 'batal antre karena kelamaan'),
           legendItem('legend__swatch--full', 'pulang karena bangku penuh'),
         ]),
       ]),
-      banner,
       reducedMotion &&
         h('p', { class: 'notice' }, [
           icon('info'),
@@ -340,6 +566,7 @@ export function renderDay(container, { store, activeDay, completeDay }) {
 
   observer.observe(canvas);
   scene.resize();
+  fitWindow();
   player.setPace(startPace);
   player.start();
   if (!reducedMotion && !simulation.finished) player.play();
@@ -347,7 +574,7 @@ export function renderDay(container, { store, activeDay, completeDay }) {
   renderHud();
   play('open');
   // He greets the day once the rolling door is up.
-  const greeting = window.setTimeout(() => remark('open', true), 1300);
+  const greeting = window.setTimeout(() => greet(), 1300);
 
   return {
     heading,
@@ -355,6 +582,10 @@ export function renderDay(container, { store, activeDay, completeDay }) {
       window.clearTimeout(closingTimer);
       window.clearTimeout(remarkTimer);
       window.clearTimeout(greeting);
+      window.clearTimeout(guideTimer);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', fitWindow);
+      tour?.close();
       observer.disconnect();
       player.stop();
     },

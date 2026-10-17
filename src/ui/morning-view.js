@@ -12,7 +12,8 @@
  * change.
  */
 
-import { COSTS, DAY, DEMAND, LIMITS, RENT_RISE, REPUTATION, SHIFTS, START } from '../game/config.js';
+import { challengeForDay } from '../game/challenges.js';
+import { CHALLENGES, COSTS, DAY, DEMAND, GROWTH, LIMITS, RENT_RISE, REPUTATION, SHIFTS, START } from '../game/config.js';
 import { wagePerHour } from '../game/day.js';
 import { priceFactor } from '../game/demand.js';
 import { checkDecisions } from '../game/game.js';
@@ -20,10 +21,10 @@ import { dayCalendar } from './calendar.js';
 import { createStepper, showFieldError } from './controls.js';
 import { h, icon, svg } from './dom.js';
 import { basketCount, draftFacts, loadDraft, saveDraft } from './draft.js';
-import { compact, hourRange, hourTick, integer, percent, rupiah } from './format.js';
-import { createLiveNumbers } from './motion.js';
+import { compact, decimal, hourRange, hourTick, integer, percent, rupiah, spokenRupiah } from './format.js';
+import { createLiveNumbers, pop, refuse } from './motion.js';
 import { bubble } from './pak-erlangga.js';
-import { EVENT_TEXT, problemText, SHIFT_LABELS, SHOP_NAME } from './text.js';
+import { CHALLENGE_TEXT, EVENT_TEXT, problemText, SHIFT_LABELS, SHOP_NAME } from './text.js';
 import { startTour } from './tour.js';
 
 /** How long the screen is left to settle before the first-day guide starts. */
@@ -84,11 +85,12 @@ function rentWords(day) {
   if (day === 1) {
     return (
       `Oh ya, satu lagi. Pemilik ruko sudah bilang: mulai hari ke-${RENT_RISE.fromDay} sewanya naik ` +
-      `${rupiah(RENT_RISE.amount)} sehari. Jadi warungnya jangan cuma jalan di tempat, ya.`
+      `${rupiah(RENT_RISE.amount)} sehari. Katanya karena warung ini bakal makin ramai. Jadi jangan cuma jalan di tempat, ya.`
     );
   }
-  if (day === RENT_RISE.fromDay - 1) return `Ingat, besok sewanya naik jadi ${higher} sehari. Sudah siap?`;
-  if (day === RENT_RISE.fromDay) return `Mulai hari ini sewanya ${higher} sehari. Cara lama belum tentu masih untung.`;
+  if (day === RENT_RISE.fromDay - 1) return `Ingat, besok sewanya naik jadi ${higher} sehari, dan warungnya mulai lebih ramai. Sudah siap?`;
+  if (day === RENT_RISE.fromDay)
+    return `Mulai hari ini sewanya ${higher} sehari, dan yang datang kira-kira ${compact(GROWTH.demandFactor)} kali lipat biasanya. Cara lama belum tentu masih cukup.`;
   return null;
 }
 
@@ -118,10 +120,10 @@ function morningWords(game) {
       `Kemarin ada ${integer(arrivals)} orang yang datang, dan ${integer(served)} di antaranya kebagian makan. ` +
         (lost.length > 0 ? `Sayangnya ${list(lost)}. ` : 'Tidak ada yang pulang kecewa. ') +
         (profit >= 0
-          ? `Hasilnya, kita untung ${rupiah(profit)}.`
+          ? `Hasilnya, kita untung ${spokenRupiah(profit)}.`
           : lost.length > 0
-            ? `Hasilnya, kita rugi ${rupiah(-profit)}.`
-            : `Tapi tetap rugi ${rupiah(-profit)}: biaya hari itu lebih besar daripada hasil jualannya.`),
+            ? `Hasilnya, kita rugi ${spokenRupiah(-profit)}.`
+            : `Tapi tetap rugi ${spokenRupiah(-profit)}: biaya hari itu lebih besar daripada hasil jualannya.`),
     ),
     paragraph(standingStill(game)),
     paragraph(rentWords(game.day)),
@@ -294,6 +296,7 @@ export function renderMorning(container, { store, openWarung }) {
 
   const stockError = h('p', { class: 'field-error', id: 'stock-error', role: 'alert', hidden: true });
   const stockHelp = h('p', { class: 'decision__help', id: 'stock-help' });
+  const stockWarning = h('p', { class: 'decision__warn', id: 'stock-warn', role: 'status', hidden: true });
   const stockStepper = createStepper({
     id: 'stock',
     name: 'stok',
@@ -377,7 +380,7 @@ export function renderMorning(container, { store, openWarung }) {
     id: 'stock',
     label: 'Stok masakan',
     control: h('div', { class: 'decision__control' }, stockStepper.element),
-    help: stockHelp,
+    help: [stockHelp, stockWarning],
     error: stockError,
   });
   const seatsCard = decisionCard({
@@ -485,7 +488,12 @@ export function renderMorning(container, { store, openWarung }) {
   const ctaSummary = h('p', { class: 'cta__summary num' });
   const cta = h('div', { class: 'cta' }, [ctaSummary, openButton, blocked]);
   openButton.addEventListener('click', () => {
-    if (checkDecisions(game, draft).length > 0) return;
+    if (checkDecisions(game, draft).length > 0) {
+      // The press was heard: the button shakes its head, and the reason beside it stands out.
+      refuse(openButton);
+      pop(blocked);
+      return;
+    }
     openWarung(draft);
   });
 
@@ -500,47 +508,20 @@ export function renderMorning(container, { store, openWarung }) {
     tour = startTour(
       [
         {
-          target: staffCard,
-          title: 'Pegawai',
-          text: 'Makin banyak pegawai, makin cepat antreannya habis. Tapi gajinya tetap jalan per jam, ramai atau sepi.',
-        },
-        {
-          target: priceCard,
-          title: 'Harga per porsi',
-          text: 'Harga naik, untung per porsi ikut naik, tapi yang datang jadi lebih sedikit. Cari titik tengahnya.',
-        },
-        {
-          target: stockCard,
-          title: 'Stok masakan',
-          text: 'Masak kesedikitan, pelanggan kehabisan. Kebanyakan, sisanya basi dan modalnya hilang.',
-        },
-        {
-          target: seatsCard,
-          title: 'Bangku tunggu',
-          text: 'Makin banyak bangku, makin banyak yang bisa menunggu giliran. Tapi kalau pegawaimu kewalahan, bangku sedikit lebih aman: orang yang menunggu lama lalu batal antre lebih merusak nama warung.',
-        },
-        {
-          target: shopTeaser,
-          title: SHOP_NAME,
-          text: 'Kalau kasnya lagi longgar, mampir ke sini: ada bangku, pelatihan, dan peralatan. Hari pertama tidak wajib belanja.',
+          // The four choices, as one thing: each card says in its own words what it does.
+          target: () => document.querySelector('.decisions'),
+          title: 'Pilihanmu hari ini',
+          text: 'Pegawai, harga, stok, dan bangku. Ubah-ubah dulu sesukamu: angka berlatar kuning selalu ikut berubah.',
         },
         {
           target: nota,
           title: 'Nota pagi',
-          text: 'Ini hitungan uangmu: yang dibayar pagi ini, yang dibayar malam nanti, dan berapa pelanggan yang dibutuhkan supaya balik modal.',
-        },
-        {
-          // In the header, which this screen does not build: found when the step is shown.
-          target: () => document.getElementById('status-reputation'),
-          title: 'Reputasi',
-          text:
-            'Ini nama baik warungmu. Naik kalau pelanggan dilayani dengan cepat; turun kalau mereka menunggu lama, batal antre, ' +
-            'tidak dapat bangku, atau kehabisan. Makin tinggi, makin banyak yang datang besok. Tekan angkanya kapan saja untuk melihat hitungannya.',
+          text: 'Ini hitungan uangmu: yang dibayar pagi ini, yang dibayar malam nanti, dan berapa pelanggan supaya balik modal.',
         },
         {
           target: cta,
           title: 'Buka warung',
-          text: 'Kalau pilihanmu sudah mantap, buka warungnya dari sini. Sebelum itu, coba ubah-ubah dulu: angka berlatar kuning selalu ikut berubah.',
+          text: 'Kalau sudah mantap, buka warungnya dari sini. Sisanya saya jelaskan sambil jalan.',
         },
       ],
       {
@@ -617,8 +598,8 @@ export function renderMorning(container, { store, openWarung }) {
     if (yesterday) {
       const { served, soldOut, stockLeft } = yesterday.results;
       memory = ` Kemarin terjual ${integer(served)} dari ${integer(yesterday.decisions.stock)} porsi`;
-      if (soldOut > 0) memory += `; ${integer(soldOut)} pelanggan kehabisan.`;
-      else if (stockLeft > 0) memory += `; ${integer(stockLeft)} porsi terbuang.`;
+      if (soldOut > 0) memory += `, dan ${integer(soldOut)} pelanggan kehabisan.`;
+      else if (stockLeft > 0) memory += `, dan ${integer(stockLeft)} porsi terbuang.`;
       else memory += '.';
     }
     stockHelp.replaceChildren(
@@ -632,6 +613,17 @@ export function renderMorning(container, { store, openWarung }) {
         : '',
       `.${memory}`,
     );
+    // Not a forecast: the most the pegawai can serve in a day, and what came yesterday.
+    const ceiling = Math.floor(facts.capacity.reduce((total, perHour) => total + perHour, 0) * (DAY.hours / facts.capacity.length));
+    const came = yesterday?.results.arrivals ?? null;
+    if (draft.stock > ceiling) {
+      stockWarning.textContent = `Pegawaimu paling banyak sanggup melayani ${integer(ceiling)} porsi sehari. Sisanya pasti terbuang.`;
+    } else if (came !== null && draft.stock > came * 1.25 * (game.day === GROWTH.fromDay ? GROWTH.demandFactor : 1)) {
+      stockWarning.textContent = `Kemarin yang datang hanya ${integer(came)} orang. Stok sebanyak ini kemungkinan besar bersisa.`;
+    } else {
+      stockWarning.textContent = '';
+    }
+    stockWarning.hidden = stockWarning.textContent === '';
     // Short of cash is said here too: this is the number that mends it.
     showFieldError(stockError, problemFor('stock') ?? problemFor('cash'));
     // The plus stops where the cash does. A stock that is already above it
@@ -689,7 +681,7 @@ export function renderMorning(container, { store, openWarung }) {
     );
     breakEvenRow.amount.textContent = Number.isFinite(facts.breakEven)
       ? `${integer(Math.ceil(facts.breakEven))} pelanggan`
-      : '—';
+      : '-';
 
     // Queue parameters
     const distinctStaff = [...new Set(facts.staff)];
@@ -770,7 +762,16 @@ export function renderMorning(container, { store, openWarung }) {
   const heading = h('h1', { id: 'view-title', tabindex: '-1', text: 'Siapkan warung hari ini' });
   container.append(
     h('section', { class: 'view view--pagi', 'aria-labelledby': 'view-title' }, [
-      h('header', { class: 'view__head' }, [heading, dayCalendar(game, { planning: true })]),
+      h('header', { class: 'view__head' }, [
+        heading,
+        dayCalendar(game, { planning: true }),
+        // One small goal for the day, judged tonight from the report.
+        h('p', { class: 'challenge' }, [
+          h('span', { class: 'challenge__mark', 'aria-hidden': 'true' }, icon('target')),
+          h('span', {}, [h('strong', { text: 'Tantangan hari ini: ' }), `${CHALLENGE_TEXT[challengeForDay(game.seed, game.day)]}.`]),
+          h('span', { class: 'challenge__prize num', text: `cap + ${rupiah(CHALLENGES.reward)}` }),
+        ]),
+      ]),
       news &&
         h('section', { class: 'news', 'aria-labelledby': 'news-title' }, [
           h('p', { class: 'news__kicker' }, [icon('megaphone'), 'Kabar pagi']),
@@ -803,9 +804,39 @@ export function renderMorning(container, { store, openWarung }) {
 
   update();
 
+  /**
+   * The reputation is explained on the first morning it counts for something:
+   * the second, when yesterday's service has moved it and it decides how many
+   * come today.
+   */
+  function showReputation() {
+    if (tour) return;
+    const chip = document.getElementById('status-reputation');
+    if (!chip) return;
+    tour = startTour(
+      [
+        {
+          target: chip,
+          title: 'Reputasi',
+          text:
+            `Ini nama baik warungmu, sekarang ${decimal(game.reputation, 0)}. Naik kalau pelanggan cepat dilayani, turun kalau mereka ` +
+            'menunggu lama, batal antre, atau tidak kebagian. Makin tinggi, makin banyak yang datang hari ini. Tekan angkanya untuk melihat hitungannya.',
+        },
+      ],
+      {
+        onEnd: () => {
+          tour = null;
+          store.setPrefs({ reputationSeen: true });
+        },
+      },
+    );
+  }
+
   // The very first morning starts with the guide, once the screen has settled.
   if (game.history.length === 0 && !store.prefs.tourSeen) {
     tourTimer = window.setTimeout(showGuide, TOUR_DELAY_MS);
+  } else if (game.history.length > 0 && !store.prefs.reputationSeen) {
+    tourTimer = window.setTimeout(showReputation, TOUR_DELAY_MS);
   }
 
   return {

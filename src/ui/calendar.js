@@ -36,6 +36,7 @@ export function dayCalendar(game, { selected = null, planning = false } = {}) {
       const label =
         `Hari ${day}: ${gain ? 'laba' : 'rugi'} ${rupiah(Math.abs(profit))}` +
         (happened ? `, ${happened.name.toLowerCase()}` : '') +
+        (report.challenge?.met ? ', tantangan tercapai' : '') +
         `${rentNote}. Buka laporannya.`;
       return h(
         'a',
@@ -57,6 +58,7 @@ export function dayCalendar(game, { selected = null, planning = false } = {}) {
           // A loss keeps its minus sign, so the color is not the only thing that tells it apart.
           h('span', { class: 'cal__amount num', text: shortRupiah(profit).replace(/Rp\s/, '') }),
           happened && h('span', { class: 'cal__event' }, icon(happened.icon)),
+          report.challenge?.met && h('span', { class: 'cal__cap', title: 'Tantangan hari itu tercapai' }, icon('check')),
           rentMark,
         ],
       );

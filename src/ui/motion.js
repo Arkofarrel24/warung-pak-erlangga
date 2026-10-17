@@ -81,6 +81,60 @@ export function pop(element) {
 }
 
 /**
+ * One icon takes the place of another in the same spot (pause for play). The
+ * new one grows into focus over the blink in which the old one would
+ * otherwise be seen to vanish, so the swap reads as one thing changing.
+ */
+export function swapIn(element) {
+  if (prefersReducedMotion() || !element.animate) return;
+  element.animate(
+    [
+      { transform: 'scale(0.6)', opacity: 0, filter: 'blur(2px)' },
+      { transform: 'scale(1)', opacity: 1, filter: 'blur(0)' },
+    ],
+    { duration: 160, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+  );
+}
+
+/**
+ * Something lands here: a coin in the jar, a star on the certificate. It
+ * swells and settles with one small overshoot. Kept for rewards; a value the
+ * player has set themselves gets the plainer pop().
+ */
+export function bounce(element) {
+  if (prefersReducedMotion() || !element.animate) return;
+  element.animate(
+    [
+      { transform: 'scale(1)', easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+      { transform: 'scale(1.14)', offset: 0.32, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' },
+      { transform: 'scale(0.97)', offset: 0.68, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+      { transform: 'scale(1)' },
+    ],
+    { duration: 320 },
+  );
+}
+
+/**
+ * A short shake of the head: the press was heard, and the answer is no. For
+ * a control that cannot do what was asked right now, where saying nothing
+ * would look like the press had been missed.
+ */
+export function refuse(element) {
+  if (prefersReducedMotion() || !element.animate) return;
+  element.animate(
+    [
+      { transform: 'translateX(0)' },
+      { transform: 'translateX(-5px)' },
+      { transform: 'translateX(4px)' },
+      { transform: 'translateX(-3px)' },
+      { transform: 'translateX(2px)' },
+      { transform: 'translateX(0)' },
+    ],
+    { duration: 260, easing: 'ease-out' },
+  );
+}
+
+/**
  * Numbers that follow from the player's choices. Each is set apart from the
  * fixed words around it, and flashes when it differs from what was shown
  * under the same key before, so the eye is drawn to what a choice changed.
@@ -173,6 +227,59 @@ export function flyCoins(from, to, { count = 8, lost = false, onArrive } = {}) {
       .catch(() => {})
       .finally(() => coin.remove());
   }
+}
+
+/**
+ * One coin thrown from where it lay to where it is counted, in a single arc.
+ * It answers a press, so it is under way at once and lands in under half a
+ * second. Across the screen it moves evenly; up and down it is thrown: fast
+ * off the hand, slowing to the top of the arc, and falling from there.
+ *
+ * @param {DOMRect} from where the coin was when it was picked up
+ * @param {Element} to
+ * @param {() => void} [onArrive] called when it lands, or at once when nothing is thrown
+ */
+export function tossCoin(from, to, onArrive) {
+  if (prefersReducedMotion() || !to?.isConnected || !document.body.animate) {
+    onArrive?.();
+    return;
+  }
+  const target = to.getBoundingClientRect();
+  const startX = from.left + from.width / 2;
+  const startY = from.top + from.height / 2;
+  const endX = target.left + target.width / 2;
+  const endY = target.top + target.height / 2;
+  // The arc clears whichever end is higher, and a longer throw goes higher.
+  const top = Math.min(startY, endY) - 18 - Math.abs(endX - startX) * 0.08;
+
+  const coin = document.createElement('span');
+  coin.className = 'toss__coin';
+  const flight = document.createElement('span');
+  flight.className = 'toss';
+  flight.setAttribute('aria-hidden', 'true');
+  flight.append(coin);
+  document.body.append(flight);
+
+  const duration = 440;
+  flight.animate([{ transform: `translateX(${startX.toFixed(1)}px)` }, { transform: `translateX(${endX.toFixed(1)}px)` }], {
+    duration,
+    easing: 'cubic-bezier(0.3, 0, 0.7, 1)',
+    fill: 'both',
+  });
+  const rise = (startY - top) / (startY - top + (endY - top) || 1);
+  coin
+    .animate(
+      [
+        { transform: `translateY(${startY.toFixed(1)}px) scale(1.15)`, easing: 'cubic-bezier(0.2, 0.7, 0.4, 1)' },
+        // The share of the flight spent rising follows from how far up it has to go.
+        { transform: `translateY(${top.toFixed(1)}px) scale(1)`, offset: Math.min(Math.max(Math.sqrt(rise) * 0.62, 0.2), 0.7), easing: 'cubic-bezier(0.5, 0, 0.9, 0.6)' },
+        { transform: `translateY(${endY.toFixed(1)}px) scale(0.7)` },
+      ],
+      { duration, fill: 'both' },
+    )
+    .finished.then(() => onArrive?.())
+    .catch(() => {})
+    .finally(() => flight.remove());
 }
 
 /**

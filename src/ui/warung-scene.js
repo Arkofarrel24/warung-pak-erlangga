@@ -19,6 +19,13 @@
  * left, wait on the plastic stools, are served at the counter, and leave to
  * the right.
  *
+ * The figures are small, so what they feel is said with the whole body, on
+ * a spring: they drop onto a stool with a little give, hop when the food is
+ * in their hand, fidget when their patience is nearly gone, and jolt to
+ * their feet when it is. Each of those marks a change in the queue; nothing
+ * springs for its own sake, and nothing springs when the day is played too
+ * fast to watch or the user has asked for less motion.
+ *
  * The place is drawn as an Indonesian warung, not a market stall: a clay-tile
  * roof, a painted wooden front, a cloth banner with its name, a glass
  * display case of dishes, strings of sachets and a bunch of bananas hanging
@@ -48,6 +55,34 @@ const GLIDE_SECONDS = 0.16;
 /** Seconds a customer stands at the door before turning back. */
 const HESITATE_SECONDS = 0.5;
 const MAX_FLOATERS = 7;
+/** A rising word that would cover another is lifted above it, this many lines at most. */
+const FLOATER_LANES = 3;
+/** The first part of a rising word's life, in which it pops up to its size. */
+const FLOATER_POP = 0.14;
+
+/**
+ * The spring a figure's body sits on: stiff enough to be over in a third of
+ * a second, loose enough to go once past rest on the way.
+ */
+const SPRING = Object.freeze({ stiffness: 300, damping: 15 });
+/** How hard each change of state sets the spring going. Up is positive. */
+const KICK = Object.freeze({
+  sit: -7, //     drops onto the stool
+  rise: 4, //     gets up when called
+  served: 8.5, // a hop, food in hand
+  slump: -6, //   turned away at the door
+  handOver: 5, // the pegawai, passing the order across
+});
+/** How far off the ground a spring one unit above rest lifts a figure, in units of the scene. */
+const LIFT = 2.2;
+/** How much taller (above rest) or shorter (below it) the same spring draws the figure. */
+const STRETCH = 0.25;
+/** A moment so far back that whatever started then has long since finished. */
+const LONG_AGO = -1e6;
+/** Below this share of their patience a waiting customer starts to fidget: where the bar turns red. */
+const FIDGET_BELOW = 0.25;
+/** Seconds for the jolt of a customer who gives up to die away. */
+const JOLT_SECONDS = 0.28;
 /** Hours since opening at which the lamps come on (17.30). */
 const LIGHTS_ON = 9.5;
 
@@ -109,6 +144,15 @@ export class WarungScene {
   /** The scenery that is not the simulation: traffic, the cat, smoke, lights, rain. */
   #life = new StreetLife();
   #weather = null;
+  /** Whether the day is slow enough to watch: only then do the figures spring. */
+  #lively = false;
+  /** The tallest the scene may be drawn, in CSS pixels: a screen that must fit the window sets it lower. */
+  #maxHeight = 360;
+  /** One spring per booth, for the pegawai standing at it. */
+  #staffSprings = [];
+  /** The board hung under the banner ("HABIS", "TUTUP"), and when it was hung (in #time). */
+  #board = null;
+  #boardHung = LONG_AGO;
 
   /**
    * @param {HTMLCanvasElement} canvas
@@ -168,6 +212,27 @@ export class WarungScene {
     this.#actors.clear();
     this.#floaters = [];
     this.#soldOut = false;
+    this.#staffSprings = Array.from({ length: this.#maxServers }, () => ({ bounce: 0, bounceV: 0 }));
+    this.#board = null;
+  }
+
+  /**
+   * The pegawai greet the street with a hop: the warung opens, or closes for
+   * the day. Whoever calls it decides whether there should be motion at all.
+   */
+  greet() {
+    this.#staffSprings.forEach((spring, i) => {
+      spring.bounceV += KICK.handOver * (1 + (i % 2) * 0.25);
+    });
+  }
+
+  /** Limits how tall the scene is drawn, then lays it out again. Returns whether anything changed. */
+  limitHeight(maxHeight) {
+    const next = Math.round(clamp(maxHeight, 210, 360));
+    if (next === this.#maxHeight) return false;
+    this.#maxHeight = next;
+    this.resize();
+    return true;
   }
 
   /** Recomputes the layout from the canvas's current width. */
@@ -177,7 +242,7 @@ export class WarungScene {
     if (width === 0) return;
 
     const compact = width < 520;
-    const height = Math.round(clamp(width * 0.42, 210, 360));
+    const height = Math.round(clamp(width * 0.42, 210, Math.max(this.#maxHeight, 210)));
     // One slot of counter per pegawai, between a narrowest and a widest.
     const slotAt = (size) => clamp((width * 0.36) / this.#maxServers, size * 3.4, size * 6);
     // What has to fit side by side: the way in, the stools, the stall, the way out.
@@ -252,6 +317,22 @@ export class WarungScene {
   }
 
   /**
+   * Where on the counter a customer served at the given booth leaves
+   * something behind: on the counter top, beside the pegawai who served
+   * them, clear of both their faces. It is the side they do not walk off
+   * to, so the price that rises over their head as they go does not cover
+   * it. In CSS pixels from the top left corner of the canvas, or null while
+   * the scene has no layout yet.
+   */
+  counterSpot(serverIndex) {
+    const layout = this.#layout;
+    if (!layout) return null;
+    const { booths, slot, counterTop, unit } = layout;
+    const booth = booths[clamp(serverIndex, 0, booths.length - 1)];
+    return { x: booth - slot / 2, y: counterTop + unit * 0.5 };
+  }
+
+  /**
    * Reacts to one event of the engine. Only called while events come slowly
    * enough to watch; at high speed the figures are snapped into place by
    * sync() instead.
@@ -287,6 +368,10 @@ export class WarungScene {
       actor.state = STATE.HAPPY;
       actor.targetX = layout.exit;
       actor.targetY = layout.ground + unit * 1.6;
+      // A hop with the food in hand, and the pegawai who passed it across leans into it.
+      actor.bounceV += KICK.served;
+      const server = this.#staffSprings[record.serverIndex];
+      if (server) server.bounceV += KICK.handOver;
       // The price goes with whoever has just paid, over their head as they
       // walk off: clear of the banner and of the faces behind the counter.
       // (A service can be over before the customer has walked up to the
@@ -298,7 +383,13 @@ export class WarungScene {
     } else if (record.type === EVENT.RENEGE) {
       this.#leaveUnserved(record.customer, STATE.ANGRY);
       const actor = this.#actors.get(record.customer.id);
-      if (actor) this.#float('kelamaan!', actor.x, layout.ground - unit * 5.9, this.#colors.reneged);
+      if (actor) {
+        // Up off the stool with a jolt.
+        actor.jolt = 1;
+        this.#float('kelamaan!', actor.x, layout.ground - unit * 5.9, this.#colors.reneged);
+      }
+    } else if (record.type === EVENT.CLOSE) {
+      this.greet();
     } else if (record.type === EVENT.SOLD_OUT) {
       for (const customer of record.dismissed) {
         this.#leaveUnserved(customer, STATE.SAD);
@@ -369,6 +460,7 @@ export class WarungScene {
     this.#staff = simulation.staff;
     this.#busy = simulation.servers.map((customer) => customer !== null);
     this.#soldOut = simulation.stock === 0;
+    this.#lively = animate;
   }
 
   /**
@@ -390,6 +482,7 @@ export class WarungScene {
     // The scenery keeps its own time: it does not hurry when the day is sped up.
     this.#life.update(dt, layout, { busy: closed ? 0 : this.#busy.filter(Boolean).length, raining });
 
+    for (const spring of this.#staffSprings) this.#spring(spring, dt * pace);
     this.#drawSky(dayHour);
     this.#drawStreet();
     this.#life.drawTraffic(context, layout, this.#colors);
@@ -425,6 +518,11 @@ export class WarungScene {
       state: STATE.QUEUE,
       mark: null,
       hesitate: 0,
+      // The spring its body sits on, the jolt of giving up, and whether it was last seen sitting.
+      bounce: 0,
+      bounceV: 0,
+      jolt: 0,
+      seated: false,
       shirt: shirts[customer.id % shirts.length],
       skin: skins[(customer.id * 7) % skins.length],
       headwear: 'hair',
@@ -461,7 +559,35 @@ export class WarungScene {
     );
     if (repeated) return;
     if (this.#floaters.length >= MAX_FLOATERS) this.#floaters.shift();
-    this.#floaters.push({ text, x, y, color, age: 0, follow });
+    // Two sales a moment apart would print one price over the other: the
+    // later word takes the first line above that no word nearby is on.
+    const taken = new Set(
+      this.#floaters
+        .filter((floater) => floater.age < 0.7 && Math.abs(floater.x - x) < unit * 8 && Math.abs(floater.base - y) < unit * 3)
+        .map((floater) => floater.lane),
+    );
+    let lane = 0;
+    while (taken.has(lane) && lane < FLOATER_LANES - 1) lane++;
+    this.#floaters.push({ text, x, y: y - lane * unit * 1.75, base: y, lane, color, age: 0, follow });
+  }
+
+  /**
+   * Moves a spring on by `seconds`: a body at `bounce` (0 is rest) going at
+   * `bounceV`. Taken in small steps, so it behaves the same at any frame rate.
+   */
+  #spring(body, seconds) {
+    if (body.bounce === 0 && body.bounceV === 0) return;
+    const steps = Math.max(Math.ceil(seconds / 0.008), 1);
+    const step = seconds / steps;
+    for (let i = 0; i < steps; i++) {
+      body.bounceV += (-SPRING.stiffness * body.bounce - SPRING.damping * body.bounceV) * step;
+      body.bounce += body.bounceV * step;
+    }
+    // Come to rest: it would otherwise tremble forever, too little to see.
+    if (Math.abs(body.bounce) < 0.002 && Math.abs(body.bounceV) < 0.02) {
+      body.bounce = 0;
+      body.bounceV = 0;
+    }
   }
 
   #moveActors(dt, pace) {
@@ -473,6 +599,9 @@ export class WarungScene {
     const hurry = 1 - Math.exp(-dt / (GLIDE_SECONDS / pace / 1.8));
 
     for (const actor of this.#actors.values()) {
+      this.#spring(actor, dt * pace);
+      if (actor.jolt > 0) actor.jolt = Math.max(actor.jolt - (dt * pace) / JOLT_SECONDS, 0);
+
       const rate = actor.state === STATE.ANGRY ? hurry : glide;
       // Leaving figures walk at a steadier pace than the glide alone gives.
       const leaving = actor.state === STATE.HAPPY || actor.state === STATE.ANGRY || actor.state === STATE.SAD;
@@ -486,22 +615,52 @@ export class WarungScene {
       actor.x += (actor.targetX - actor.x) * rate;
       actor.y += (actor.targetY - actor.y) * rate;
 
+      // Dropping onto a stool, and getting up from it when called.
+      const seated = actor.state === STATE.QUEUE && !this.#moving(actor);
+      if (seated !== actor.seated) {
+        if (this.#lively) actor.bounceV += seated ? KICK.sit : KICK.rise;
+        actor.seated = seated;
+      }
+
       if (actor.state === STATE.TURNING && Math.abs(actor.targetX - actor.x) < unit) {
         actor.hesitate -= dt * pace;
-        if (actor.hesitate <= 0) this.#leaveUnserved(actor.customer, STATE.SAD);
+        if (actor.hesitate <= 0) {
+          this.#leaveUnserved(actor.customer, STATE.SAD);
+          actor.bounceV += KICK.slump;
+        }
       }
     }
+  }
+
+  /** Whether a figure is still on its way to where it is going. */
+  #moving(actor) {
+    return Math.abs(actor.targetX - actor.x) + Math.abs(actor.targetY - actor.y) > 1.5;
   }
 
   #drawCustomer(actor, clock) {
     const { unit, ground } = this.#layout;
     const context = this.#context;
     const { customer, state } = actor;
-    const moving = Math.abs(actor.targetX - actor.x) + Math.abs(actor.targetY - actor.y) > 1.5;
+    const moving = this.#moving(actor);
     const leaving = state === STATE.HAPPY || state === STATE.ANGRY || state === STATE.SAD;
     const walking = moving || leaving;
     const seated = state === STATE.QUEUE && !moving;
     const facing = leaving ? Math.sign(actor.targetX - actor.x) || 1 : 1;
+
+    // What is left of this customer's patience: 1 when they sat down, 0 at the moment they give up.
+    const waited = clock - customer.arrivalTime;
+    const left = Number.isFinite(customer.patience) ? clamp(1 - waited / customer.patience, 0, 1) : 1;
+    const fidgeting = seated && left < FIDGET_BELOW && this.#lively;
+
+    // The body on its spring: above rest it is in the air and drawn out a
+    // little, below rest it is pressed together. The feet stay where they are.
+    const lift = Math.max(actor.bounce, 0) * unit * LIFT;
+    const stretch = actor.bounce * STRETCH;
+    // Side to side: the jolt of giving up, or the small restlessness before it.
+    const sway =
+      Math.sin(this.#time * 46 + actor.id) * actor.jolt * unit * 0.3 +
+      (fidgeting ? Math.sin(this.#time * 21 + actor.id * 1.3) * unit * 0.07 : 0);
+    const bodyX = actor.x + sway;
 
     // A soft shadow under whoever is on their feet.
     if (!seated) {
@@ -516,7 +675,11 @@ export class WarungScene {
     else if (state === STATE.ANGRY) mood = 'angry';
     else if (state === STATE.SAD || state === STATE.TURNING) mood = 'sad';
 
-    this.#drawPerson(actor.x, actor.y, {
+    context.save();
+    context.translate(bodyX, actor.y);
+    context.scale(1 - stretch * 0.6, 1 + stretch);
+    context.translate(-bodyX, -actor.y);
+    this.#drawPerson(bodyX, actor.y - lift, {
       shirt: actor.shirt,
       skin: actor.skin,
       headwear: actor.headwear,
@@ -528,13 +691,14 @@ export class WarungScene {
       mood,
       bag: state === STATE.HAPPY,
     });
+    context.restore();
 
-    const headY = actor.y - unit * (seated ? 3.35 : 3.85);
+    const headY = actor.y - lift - unit * (seated ? 3.35 : 3.85) * (1 + stretch);
     if (seated) {
-      // The patience bar: full when they sat down, empty at the moment they will give up.
-      const waited = clock - customer.arrivalTime;
-      const left = Number.isFinite(customer.patience) ? clamp(1 - waited / customer.patience, 0, 1) : 1;
-      const barWidth = unit * 2.3;
+      // The patience bar: full when they sat down, empty at the moment they
+      // will give up. Once it is red it beats, slowly, so the eye finds it.
+      const beat = fidgeting ? 1 + Math.max(Math.sin(this.#time * 7 + actor.id), 0) * 0.16 : 1;
+      const barWidth = unit * 2.3 * beat;
       const x = actor.x - barWidth / 2;
       const y = headY - unit * 1.7;
       context.fillStyle = this.#colors.surface;
@@ -981,13 +1145,14 @@ export class WarungScene {
       context.stroke();
     }
 
-    // The lamp comes on toward evening.
+    // The lamp comes on toward evening, and its glow grows over the next quarter of an hour.
     const lit = dayHour >= LIGHTS_ON;
     const lampX = stallX + stallWidth * 0.5;
     const lampY = roof + unit * 3.9;
     if (lit) {
+      const warmth = clamp((dayHour - LIGHTS_ON) / 0.25, 0, 1) * 0.6;
       const glow = context.createRadialGradient(lampX, lampY, 1, lampX, lampY, unit * 9);
-      glow.addColorStop(0, 'rgb(255 214 120 / 0.6)');
+      glow.addColorStop(0, `rgb(255 214 120 / ${warmth.toFixed(3)})`);
       glow.addColorStop(1, 'rgb(255 214 120 / 0)');
       context.fillStyle = glow;
       context.fillRect(lampX - unit * 9, lampY - unit * 9, unit * 18, unit * 18);
@@ -1016,7 +1181,9 @@ export class WarungScene {
       const busy = this.#busy[i];
       if (!busy && idleLeft <= 0) return;
       if (!busy) idleLeft--;
-      const lift = busy ? Math.abs(Math.sin(this.#time * 9 + i * 2)) * unit * 0.3 : 0;
+      // Working, they bob; passing an order across, or greeting the street, they spring.
+      const spring = this.#staffSprings[i]?.bounce ?? 0;
+      const lift = (busy ? Math.abs(Math.sin(this.#time * 9 + i * 2)) * unit * 0.3 : 0) + Math.max(spring, 0) * unit * LIFT;
       // One in a jilbab, the next in a peci: no chef's hats in a warung.
       this.#drawPerson(x, counterTop + unit * 1.15 - lift, {
         shirt: i % 2 === 0 ? this.#colors.toska : this.#colors.daun,
@@ -1210,12 +1377,23 @@ export class WarungScene {
     }
 
     const board = this.#soldOut ? 'HABIS' : closed ? 'TUTUP' : null;
+    if (board !== this.#board) {
+      this.#board = board;
+      // Hung just now, if anyone is watching; otherwise it has been hanging there.
+      this.#boardHung = this.#lively ? this.#time : LONG_AGO;
+    }
     if (!board) return;
     const boardWidth = unit * 7.5;
     const boardHeight = unit * 2.6;
+    // It is hung on its two strings: it drops the last bit into place and
+    // swings out before it hangs still (it never quite does, in the wind).
+    const hung = this.#time - this.#boardHung;
+    const drop = (1 - clamp(hung / 0.18, 0, 1)) ** 2;
+    const swing = Math.sin(hung * 11) * 0.42 * Math.exp(-hung * 4.2);
     context.save();
-    context.translate(stallX + stallWidth * 0.36, bannerTop + bannerHeight + unit * 0.9);
-    context.rotate(Math.sin(this.#time * 2.2) * 0.035);
+    context.globalAlpha = clamp(hung / 0.08, 0, 1);
+    context.translate(stallX + stallWidth * 0.36, bannerTop + bannerHeight + unit * 0.9 - drop * unit * 2.4);
+    context.rotate(Math.sin(this.#time * 2.2) * 0.035 + swing);
     context.strokeStyle = this.#colors.ink;
     context.lineWidth = 1.5;
     context.beginPath();
@@ -1360,11 +1538,18 @@ export class WarungScene {
       const x = Math.min(Math.max(floater.x, half), width - half);
       // It comes in at once and goes out over its last third.
       context.globalAlpha = floater.age < 0.66 ? Math.min(floater.age / 0.08, 1) : 1 - (floater.age - 0.66) / 0.34;
+      // It pops up to its size, a little past it, and settles: never from nothing.
+      const t = Math.min(floater.age / FLOATER_POP, 1) - 1;
+      const size = 0.6 + 0.4 * (1 + 2.70158 * t ** 3 + 1.70158 * t ** 2);
+      context.save();
+      context.translate(x, y);
+      context.scale(size, size);
       context.lineWidth = 4;
       context.strokeStyle = this.#colors.surface;
-      context.strokeText(floater.text, x, y);
+      context.strokeText(floater.text, 0, 0);
       context.fillStyle = floater.color;
-      context.fillText(floater.text, x, y);
+      context.fillText(floater.text, 0, 0);
+      context.restore();
       return true;
     });
     context.restore();

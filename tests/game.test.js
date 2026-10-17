@@ -144,10 +144,10 @@ test('the morning cannot cost more than the cash on hand', () => {
   // Rp 1,500,000 buys 250 portions at Rp 6,000, and not one more.
   assert.deepEqual(codes(state, decide(state, { stock: 250 })), []);
   assert.deepEqual(codes(state, decide(state, { stock: 251 })), [PROBLEM.CASH]);
-  // A cash register (Rp 550,000) leaves Rp 950,000: 158 portions.
+  // A cash register (Rp 650,000) leaves Rp 850,000: 141 portions.
   const withRegister = { buy: { upgrades: ['cashRegister'] } };
-  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 158 })), []);
-  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 159 })), [PROBLEM.CASH]);
+  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 141 })), []);
+  assert.deepEqual(codes(state, decide(state, { ...withRegister, stock: 142 })), [PROBLEM.CASH]);
 });
 
 // ---------------------------------------------------------------------------
@@ -241,7 +241,7 @@ test('what is bought in the morning is in use that day and is kept', () => {
   });
   const { state: next, report } = playDay(state, decisions);
 
-  assert.equal(report.ledger.purchases, 75_000 + 325_000 + 90_000);
+  assert.equal(report.ledger.purchases, 80_000 + 375_000 + 90_000);
   assert.equal(report.setup.serviceRate, 12 * 1.15);
   assert.equal(report.setup.patienceRate, 5 / 1.5);
   assert.equal(report.setup.wagePerHour, 8_500 * 1.08);
@@ -250,7 +250,7 @@ test('what is bought in the morning is in use that day and is kept', () => {
   assert.equal(next.seatsOwned, 3);
   assert.equal(next.trainingLevel, 1);
   assert.equal(next.upgrades.queueNumbers, true);
-  assert.equal(next.cash, 1_500_000 - 490_000 + report.ledger.profit);
+  assert.equal(next.cash, 1_500_000 - 545_000 + report.ledger.profit);
   // Nothing is bought twice: tomorrow's default decisions buy nothing.
   assert.deepEqual(defaultDecisions(next).buy, { seats: 0, training: false, upgrades: [] });
   assert.equal(defaultDecisions(next).seats, 3);

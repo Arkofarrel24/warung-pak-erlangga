@@ -6,7 +6,7 @@
  * Indonesian.
  */
 
-import { COSTS, EVENTS, LIMITS, SHIFTS, TRAINING, UPGRADES } from '../game/config.js';
+import { CHALLENGES, COSTS, EVENTS, LIMITS, SHIFTS, TRAINING, UPGRADES } from '../game/config.js';
 import { ingredientCost } from '../game/events.js';
 import { PROBLEM } from '../game/game.js';
 import { clock, compact, percent, rupiah } from './format.js';
@@ -28,7 +28,7 @@ export const SHIFT_NAME = Object.freeze({
 });
 
 export function shiftLabel(shift) {
-  return `${SHIFT_NAME[shift.id]} ${clock(shift.from)}–${clock(shift.to)}`;
+  return `${SHIFT_NAME[shift.id]} ${clock(shift.from)}-${clock(shift.to)}`;
 }
 
 export const SHIFT_LABELS = SHIFTS.map(shiftLabel);
@@ -247,5 +247,33 @@ export function problemText(code, { morningCost, cash } = {}) {
       return 'Permainan ini sudah selesai.';
     default:
       return 'Ada keputusan yang belum bisa dijalankan.';
+  }
+}
+
+/** The day's challenge, as the goal it sets. */
+export const CHALLENGE_TEXT = Object.freeze({
+  served: `Layani paling sedikit ${Math.round(CHALLENGES.servedShare * 100)}% yang datang`,
+  patient: `Paling banyak ${CHALLENGES.reneged} orang batal antre`,
+  kept: `Paling banyak ${CHALLENGES.lost} pelanggan yang lepas`,
+  stock: `Stok pas: sisa ditambah yang kehabisan paling banyak ${CHALLENGES.stockMiss}`,
+});
+
+/**
+ * What a customer of the day says. The customer, the wait, and the ending
+ * are the engine's (see src/game/reviews.js); only the sentence is put to them here.
+ */
+export function reviewText(review) {
+  const waited = `${Math.max(Math.round(review.wait * 60), 1)} menit`;
+  switch (review.kind) {
+    case 'reneged':
+      return `Sudah ${waited} menunggu, belum juga dipanggil. Saya pulang saja.`;
+    case 'full':
+      return 'Bangkunya penuh semua. Saya cari tempat lain.';
+    case 'soldOut':
+      return `Datang pukul ${clock(review.arrivedAt)}, masakannya sudah habis.`;
+    case 'servedAfterWait':
+      return `Menunggu ${waited}, tapi akhirnya makan juga.`;
+    default:
+      return 'Baru datang langsung dilayani. Mantap.';
   }
 }

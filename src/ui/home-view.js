@@ -1,6 +1,6 @@
 /** The front of the warung: start a game, or go on with the saved one. */
 
-import { DAY, EVENTS, RENT_RISE, SERVICE, STARS, START } from '../game/config.js';
+import { DAY, EVENTS, GROWTH, RENT_RISE, SERVICE, STARS, START, TIPS } from '../game/config.js';
 import { EVENT_KIND } from '../game/events.js';
 import { STATUS } from '../game/game.js';
 import { QueueSimulation } from '../sim/engine.js';
@@ -89,6 +89,11 @@ const SCENE_MARKS = [
   ['patience', 'Batang kesabaran', 'Ada di atas kepala yang sedang menunggu. Makin pendek dan merah, makin dekat dia menyerah lalu pulang.'],
   ['service', 'Cincin kuning', 'Sedang dilayani. Begitu cincinnya menutup penuh, pesanannya selesai.'],
   ['served', 'Kantong dan “+10 rb”', 'Pulang membawa bungkusan: satu porsi terjual, uangnya masuk kas.'],
+  [
+    'tip',
+    'Koin tip',
+    `Ditinggalkan di konter oleh pelanggan yang langsung dilayani tanpa mengantre. Pencet sebelum cincinnya habis: ${rupiah(TIPS.amount)} masuk kas.`,
+  ],
   ['reneged', 'Tanda seru', 'Batal antre. Sudah duduk menunggu, tetapi sabarnya habis lebih dulu.'],
   ['balked', 'Tanda silang', 'Balik kanan. Semua bangku terisi, jadi dia tidak ikut mengantre.'],
   ['soldOut', 'Piring dicoret', 'Kehabisan. Stok masakan hari itu sudah habis.'],
@@ -141,32 +146,31 @@ function guide(startButton) {
 
   const heading = h('h2', { class: 'section-title section-title--center', id: 'guide-title', tabindex: '-1', text: 'Cara main' });
   const element = h('section', { class: 'guide', 'aria-labelledby': 'guide-title' }, [
-    h('div', { class: 'guide__head' }, [
-      heading,
-      h('p', {
-        class: 'goal__text',
-        text: `Jaga warung ${DAY.count} hari tanpa kehabisan kas, lalu tutup buku dengan laba dan reputasi setinggi mungkin.`,
-      }),
-    ]),
+    // The goal is said once, under the scene at the top of the page.
+    h('div', { class: 'guide__head' }, heading),
 
     h('ol', { class: 'how__steps' }, [
       act('sun', 'Pagi: atur warung', `Pegawai, harga, stok, dan bangku tunggu. Mampir ke ${SHOP_NAME} kalau kasnya ada.`),
-      act('shop', 'Siang: warung buka', 'Pelanggan datang, mengantre, dilayani. Yang kelamaan menunggu bisa batal antre.'),
-      act('moon', 'Malam: baca laporan', 'Laba, reputasi, dan ukuran antrean yang sungguhan. Besok coba lebih baik.'),
+      act('shop', 'Siang: warung buka', 'Pelanggan datang, mengantre, dilayani. Sambil menonton, pungut koin tip di konter.'),
+      act('moon', 'Malam: baca laporan', 'Lihat laba, reputasi, dan apa yang paling mahal hari itu. Besok coba lagi.'),
     ]),
 
     h('ul', { class: 'goal__rules' }, [
       rule(
         h('span', { class: 'goal__stars', 'aria-hidden': 'true' }, [icon('star'), icon('star'), icon('star')]),
-        `Bertahan ${DAY.count} hari dapat satu bintang. Kas akhir ${rupiah(STARS.two)} dapat dua, dan ${rupiah(STARS.three)} dapat tiga.`,
+        `Bertahan ${DAY.count} hari dapat satu bintang. Kas akhir ${rupiah(STARS.two)} dapat dua, ${rupiah(STARS.three)} dapat tiga.`,
       ),
       rule(
         h('span', { class: 'goal__mark goal__mark--warning', 'aria-hidden': 'true' }, icon('up')),
-        `Mulai hari ke-${RENT_RISE.fromDay} sewa naik ${rupiah(RENT_RISE.amount)} sehari. Warung yang jalan di tempat akan mulai rugi.`,
+        `Mulai hari ke-${RENT_RISE.fromDay} sewa naik ${rupiah(RENT_RISE.amount)} sehari, dan yang datang ${compact(GROWTH.demandFactor)} kali lipat.`,
       ),
       rule(
         h('span', { class: 'goal__mark', 'aria-hidden': 'true' }, icon('users')),
-        'Reputasi berjalan dari 0 sampai 100. Makin tinggi, makin banyak yang datang besok.',
+        'Makin tinggi reputasi, makin banyak yang datang besok.',
+      ),
+      rule(
+        h('span', { class: 'goal__mark goal__mark--coin', 'aria-hidden': 'true' }, icon('cash')),
+        `Koin tip ${rupiah(TIPS.amount)} di konter hangus kalau tidak sempat dipencet.`,
       ),
     ]),
 
@@ -215,8 +219,8 @@ function guide(startButton) {
     h('p', {
       class: 'how__note',
       text:
-        'Antreannya bukan angka karangan. Tiap pelanggan disimulasikan satu per satu dengan discrete-event simulation, ' +
-        'dan mesinnya sudah dicocokkan dengan rumus teori antrean.',
+        'Tiap pelanggan disimulasikan satu per satu dengan discrete-event simulation, ' +
+        'dan hasilnya sudah dicocokkan dengan rumus teori antrean.',
     }),
     startButton && h('div', { class: 'home__actions' }, startButton),
   ]);
@@ -280,10 +284,6 @@ export function renderHome(container, { store, startNewGame }) {
         // The way in hangs on the bottom edge of the scene, as the sign hangs on its top.
         h('div', { class: 'home__start' }, primary),
         h('p', { class: 'home__tagline', text: `Kelola warung selama ${DAY.count} hari. Jangan sampai kas habis.` }),
-        h('p', {
-          class: 'stage__caption',
-          text: 'Ini bukan video. Yang kamu lihat adalah mesin simulasi game ini sedang berjalan.',
-        }),
         h('div', { class: 'home__actions' }, others),
         store.saveFailed &&
           h('p', { class: 'notice' }, [
@@ -295,12 +295,9 @@ export function renderHome(container, { store, startNewGame }) {
             h('p', {
               text:
                 'Saya Erlangga. Tiga puluh tahun saya jaga warung ini, sekarang giliranmu. ' +
-                `Modalnya ${rupiah(START.cash)}. Tiap pagi kamu yang mengatur: berapa pegawainya, berapa harganya, berapa porsinya.`,
-            }),
-            h('p', {
-              text:
-                'Tiap malam kita baca laporannya sama-sama. Antrean itu ada ilmunya, dan warung ini tempat belajarnya. ' +
-                'Pagi pertama nanti saya temani, satu per satu.',
+                `Modalnya ${rupiah(START.cash)}. Tiap pagi kamu yang mengatur pegawai, harga, dan stoknya, ` +
+                'lalu malamnya kita baca laporannya sama-sama.' +
+                (playing ? ` Kamu sudah sampai hari ke-${game.day}, lanjutkan saja.` : ' Pagi pertama nanti saya temani.'),
             }),
           ],
           { greet: 'wave' },

@@ -8,7 +8,8 @@
  * from it on screen can be checked by hand.
  *
  *   overload    traffic intensity a = λ / (c·μ) above 1 in some hour
- *   idle        utilization ρ: the share of paid time spent serving
+ *   idle        hours in which one pegawai fewer would still have kept a at or under 1
+ *   price       the day's lost customers against what a price step keeps away or brings
  *   reneging    Erlang-A: expected reneges = θ x total time spent waiting
  *   blocking    M/M/c/K: arrivals that find all K places taken
  *   little      Little's law, Lq = λ x Wq, shown with the day's numbers
@@ -19,7 +20,7 @@
  * one is the place to look.
  */
 
-import { DAY } from './config.js';
+import { DAY, DEMAND, LIMITS } from './config.js';
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 
@@ -61,22 +62,62 @@ function overload(hours, margin) {
 }
 
 /**
- * Paid time in which nobody was served.
+ * Hours in which one pegawai fewer would still have been enough.
  *
- * Utilization ρ = busy time / staffed time. A low ρ is not a fault in
- * itself (some slack is what keeps waits short), but it has a price: the
- * wages of the idle share.
+ * Utilization ρ below 1 is not a fault in itself: some slack is what keeps
+ * waits short. A pegawai is only counted as idle where they could have been
+ * spared: in an hour with more than the fewest a warung can have, in which
+ * one fewer would still have kept the traffic intensity a = λ ÷ (c·μ) at or
+ * under 1. What it cost is that pegawai's wage for those hours.
  */
 function idle(report, hours) {
-  const { rho } = report.results;
-  const quiet = hours.filter((item) => item.rho < 0.4).map((item) => item.hour);
-  if (rho >= 0.6 || quiet.length === 0) return null;
+  const { serviceRate, wagePerHour } = report.setup;
+  const spare = hours.filter((item) => item.staff > LIMITS.staff.min && item.arrivals <= (item.staff - 1) * serviceRate);
+  if (spare.length === 0) return null;
   return {
     id: 'idle',
-    rho,
-    quietHours: quiet,
-    cost: (1 - rho) * report.ledger.wages,
+    rho: report.results.rho,
+    hours: spare.map((item) => item.hour),
+    // Every open hour: one pegawai fewer all day, which needs no shift board.
+    allDay: spare.length === hours.length,
+    // Whether the day was already scheduled per shift.
+    scheduled: Boolean(report.decisions.shifts),
+    cost: spare.length * wagePerHour,
   };
+}
+
+/**
+ * The price against the queue, read off the day's own counts.
+ *
+ * Demand is exponential in the price, so a step of Rp 1,000 up keeps away
+ * the share 1 - e^(-1,000/s) of those who came, and a step down brings
+ * e^(1,000/s) - 1 more. Two cases follow from the day:
+ *
+ *   too low   more customers were lost to the queue (reneging and balking)
+ *             than a step up would have kept away. Those sales were lost
+ *             either way, so about as many would have been served, each
+ *             for Rp 1,000 more.
+ *   too high  nobody was lost, nothing ran out, and the counter had room
+ *             in every hour for the customers a step down would have brought.
+ *
+ * Both are first-order estimates from one day, not a second simulation.
+ */
+function price(report, hours, margin) {
+  const { arrivals, served, reneged, rejected, soldOut } = report.results;
+  const step = 1_000;
+  const dearer = 1 - Math.exp(-step / DEMAND.priceSensitivity);
+  const cheaper = Math.exp(step / DEMAND.priceSensitivity) - 1;
+  const lost = reneged + rejected;
+
+  if (served > 0 && lost >= arrivals * dearer && report.decisions.price + step <= LIMITS.price.max) {
+    return { id: 'price', kind: 'low', step, share: dearer, keptAway: arrivals * dearer, lost, served, cost: served * step };
+  }
+  const roomEveryHour = hours.every((item) => item.arrivals * (1 + cheaper) <= item.capacity);
+  const gain = arrivals * cheaper * (margin - step) - served * step;
+  if (lost === 0 && soldOut === 0 && roomEveryHour && gain > 0 && report.decisions.price - step >= LIMITS.price.min) {
+    return { id: 'price', kind: 'high', step, share: cheaper, more: arrivals * cheaper, served, margin: margin - step, cost: gain };
+  }
+  return null;
 }
 
 /**
@@ -167,15 +208,19 @@ function stock(report, margin) {
 /**
  * The break-even point of the day: the portions that had to be sold for
  * revenue to cover everything paid, the ingredients of unsold portions
- * included.
+ * included. Tips picked up from the counter have already covered a little
+ * of it, so that selling exactly this many leaves a profit of zero.
  */
 function breakEven(report) {
   const { ledger, decisions, results } = report;
   const costs = ledger.ingredients + ledger.wages + ledger.rent;
+  // A day saved before tips existed has none.
+  const tips = ledger.tips ?? 0;
   return {
     id: 'breakEven',
     costs,
-    needed: costs / decisions.price,
+    tips,
+    needed: Math.max(costs - tips, 0) / decisions.price,
     sold: results.served,
     cost: 0,
   };
@@ -196,6 +241,7 @@ export function explainDay(report) {
     blocking(report, hours, margin),
     stock(report, margin),
     idle(report, hours),
+    price(report, hours, margin),
     little(report),
     breakEven(report),
   ].filter(Boolean);

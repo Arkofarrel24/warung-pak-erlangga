@@ -110,13 +110,75 @@ test('the break-even point covers everything paid that day', () => {
   assert.equal(finding.sold >= finding.needed, ledger.profit >= 0);
 });
 
-test('idle time is reported when pegawai mostly wait, with the wages it cost', () => {
+test('tips picked up that day lower the break-even point by what they cover', () => {
+  const report = playedDay();
+  const { ledger, decisions } = report;
+  const plain = find(explainDay(report), 'breakEven');
+  // The same day, with thirty coins picked up from the counter.
+  const tips = 30_000;
+  const tipped = { ...report, ledger: { ...ledger, tips, profit: ledger.profit + tips } };
+  const finding = find(explainDay(tipped), 'breakEven');
+
+  assert.equal(finding.tips, tips);
+  assert.equal(finding.costs, plain.costs);
+  assertClose(plain.needed - finding.needed, tips / decisions.price, 1e-9);
+  // Selling exactly that many portions still leaves a profit of zero.
+  assertClose(finding.needed * decisions.price + tips - finding.costs, 0, 1e-6);
+  // A day saved before there were tips reads as a day without them.
+  const { tips: _, ...old } = ledger;
+  assertClose(find(explainDay({ ...report, ledger: old }), 'breakEven').needed, plain.needed, 1e-9);
+});
+
+test('a pegawai is idle only where one fewer would still have been enough', () => {
   const report = playedDay({ staff: 5 });
   const finding = find(explainDay(report), 'idle');
+  const { serviceRate, wagePerHour } = report.setup;
 
-  assertClose(finding.rho, report.results.rho);
-  assertClose(finding.cost, (1 - report.results.rho) * report.ledger.wages);
+  // Every hour named could have done with four: traffic intensity at most 1.
+  assert.ok(finding.hours.length > 0);
+  for (const hour of finding.hours) {
+    assert.ok(report.results.periods[hour].arrivals <= 4 * serviceRate, `hour ${hour}`);
+  }
+  // What it cost is one wage for each of those hours.
+  assertClose(finding.cost, finding.hours.length * wagePerHour);
+  assert.equal(finding.allDay, finding.hours.length === 12);
+  assert.equal(finding.scheduled, false);
+
+  // One pegawai is the fewest there can be: nothing to spare, whatever the utilization.
   assert.equal(find(explainDay(playedDay({ staff: 1 })), 'idle'), undefined);
+  // An hour that one fewer would overload is not named.
+  const two = find(explainDay(playedDay({ staff: 2 })), 'idle');
+  for (const hour of two?.hours ?? []) {
+    assert.ok(playedDay({ staff: 2 }).results.periods[hour].arrivals <= serviceRate, `hour ${hour}`);
+  }
+});
+
+test('the price is too low when the queue loses more customers than a step up would', () => {
+  // Cheap and understaffed: a long queue.
+  const report = playedDay({ price: 8_000, staff: 1, stock: 200 });
+  const finding = find(explainDay(report), 'price');
+  const { arrivals, served, reneged, rejected } = report.results;
+
+  assert.equal(finding.kind, 'low');
+  assertClose(finding.share, 1 - Math.exp(-1000 / 5000));
+  assertClose(finding.keptAway, arrivals * finding.share);
+  assert.equal(finding.lost, reneged + rejected);
+  assert.ok(finding.lost >= finding.keptAway);
+  assert.equal(finding.cost, served * 1_000);
+});
+
+test('the price is too high when nobody is lost and every hour has room', () => {
+  // Dear and overstaffed: no queue at all.
+  const report = playedDay({ price: 16_000, staff: 6, stock: 200 });
+  const finding = find(explainDay(report), 'price');
+  const { arrivals, served, reneged, rejected, soldOut } = report.results;
+
+  assert.equal(reneged + rejected + soldOut, 0);
+  assert.equal(finding.kind, 'high');
+  assertClose(finding.more, arrivals * (Math.exp(1000 / 5000) - 1));
+  assertClose(finding.cost, finding.more * (16_000 - 6_000 - 1_000) - served * 1_000);
+  // At the dearest price there is no step up to suggest, and at the cheapest no step down.
+  assert.notEqual(find(explainDay(playedDay({ price: 25_000, staff: 1, stock: 60 })), 'price')?.kind, 'low');
 });
 
 test('the costliest finding comes first', () => {

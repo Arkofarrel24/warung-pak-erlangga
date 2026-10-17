@@ -19,6 +19,11 @@ export function rupiah(amount) {
   return `${rounded < 0 ? MINUS : ''}Rp${NBSP}${whole.format(Math.abs(rounded))}`;
 }
 
+/** An amount as somebody would say it: to the nearest thousand. 50326 -> "Rp 50.000". For speech, never for the books. */
+export function spokenRupiah(amount) {
+  return rupiah(Math.round(amount / 1000) * 1000);
+}
+
 /** Like rupiah(), with an explicit plus sign for gains. */
 export function signedRupiah(amount) {
   return Math.round(amount) > 0 ? `+${rupiah(amount)}` : rupiah(amount);
@@ -30,7 +35,8 @@ export function shortRupiah(amount) {
   const sign = rounded < 0 ? MINUS : '';
   const absolute = Math.abs(rounded);
   if (absolute >= 1_000_000) return `${sign}Rp${NBSP}${decimal(absolute / 1_000_000, 2)}${NBSP}jt`;
-  if (absolute >= 10_000) return `${sign}Rp${NBSP}${whole.format(Math.round(absolute / 1000))}${NBSP}rb`;
+  // From a thousand up it is said in thousands, so "7 rb" stands beside "243 rb" and not "6.928".
+  if (absolute >= 1_000) return `${sign}Rp${NBSP}${whole.format(Math.round(absolute / 1000))}${NBSP}rb`;
   return `${sign}Rp${NBSP}${whole.format(absolute)}`;
 }
 
@@ -39,7 +45,7 @@ export function integer(value) {
 }
 
 export function decimal(value, digits = 1) {
-  if (!Number.isFinite(value)) return '—';
+  if (!Number.isFinite(value)) return '-';
   return new Intl.NumberFormat(LOCALE, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -50,13 +56,13 @@ export function decimal(value, digits = 1) {
 
 /** Up to `digits` decimals, without trailing zeros: 12 -> "12", 14.4 -> "14,4". */
 export function compact(value, digits = 1) {
-  if (!Number.isFinite(value)) return '—';
+  if (!Number.isFinite(value)) return '-';
   return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: digits }).format(value).replace('-', MINUS);
 }
 
 /** 0.134 -> "13%". */
 export function percent(share, digits = 0) {
-  if (!Number.isFinite(share)) return '—';
+  if (!Number.isFinite(share)) return '-';
   return `${decimal(share * 100, digits)}%`;
 }
 
@@ -67,7 +73,7 @@ export function signed(value, digits = 1) {
 
 /** A duration given in hours, shown in minutes: 0.05 -> "3,0 menit". */
 export function minutes(hours, digits = 1) {
-  if (!Number.isFinite(hours)) return '—';
+  if (!Number.isFinite(hours)) return '-';
   return `${decimal(hours * 60, digits)} menit`;
 }
 
@@ -79,9 +85,9 @@ export function clock(hoursSinceOpening) {
   return `${String(hour).padStart(2, '0')}.${String(minute).padStart(2, '0')}`;
 }
 
-/** The hour that starts `index` hours after opening: 4 -> "12.00–13.00". */
+/** The hour that starts `index` hours after opening: 4 -> "12.00-13.00". */
 export function hourRange(index) {
-  return `${clock(index)}${JOINER}–${JOINER}${clock(index + 1)}`;
+  return `${clock(index)}${JOINER}-${JOINER}${clock(index + 1)}`;
 }
 
 /** Just the starting hour, for chart axes: 4 -> "12". */

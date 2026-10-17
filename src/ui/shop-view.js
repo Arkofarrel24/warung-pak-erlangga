@@ -17,6 +17,7 @@ import { compact, integer, rupiah } from './format.js';
 import { createLiveNumbers, pop, tilt } from './motion.js';
 import { bubble, speak } from './pak-erlangga.js';
 import { play } from './sound.js';
+import { startTour } from './tour.js';
 import { pick, SEAT_TEXT, SHOP_NAME, SHOP_WORDS, trainingText, UPGRADE_TEXT } from './text.js';
 
 /** The draft as it would be with one thing changed, leaving the real draft alone. */
@@ -334,5 +335,37 @@ export function renderShop(container, { store }) {
   );
 
   update();
-  return { heading };
+
+  // The first visit: what the numbers on a ware mean, and when it is paid for.
+  let tour = null;
+  const tourTimer =
+    store.prefs.shopSeen || wares.length === 0
+      ? null
+      : window.setTimeout(() => {
+          tour = startTour(
+            [
+              {
+                target: wares[0],
+                title: SHOP_NAME,
+                text:
+                  'Angka di tiap barang menunjukkan apa yang berubah di warungmu kalau barangnya diambil. ' +
+                  'Isi keranjang baru dibayar saat warung buka, dan langsung dipakai hari itu juga.',
+              },
+            ],
+            {
+              onEnd: () => {
+                tour = null;
+                store.setPrefs({ shopSeen: true });
+              },
+            },
+          );
+        }, 900);
+
+  return {
+    heading,
+    destroy() {
+      window.clearTimeout(tourTimer);
+      tour?.close();
+    },
+  };
 }

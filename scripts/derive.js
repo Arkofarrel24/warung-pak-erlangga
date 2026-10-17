@@ -13,14 +13,20 @@
  *                  bring in: doing nothing gets you nowhere
  *   starting cash  one full day of costs with no income at all
  *   purchases      half of what each brings over 14 days when bought on day 1
+ *   tips           every coin of a day is worth a quarter of that day's profit
+ *   growth         the second week brings a careful owner's lunch peak back to capacity
+ *   challenges     each threshold is a careful owner's median day; all stamps are worth one day's profit
  */
 
-import { COSTS, DAY, EVENTS, START } from '../src/game/config.js';
+import { COSTS, DAY, DEMAND, EVENTS, GROWTH, LIMITS, SERVICE, START, TIPS } from '../src/game/config.js';
 import { eventForDay, ingredientCost, morningNews } from '../src/game/events.js';
 import { expectedDay } from '../src/game/forecast.js';
-import { defaultDecisions, newGame, playDay, STATUS } from '../src/game/game.js';
+import { defaultDecisions, newGame, playDay, startDay, STATUS } from '../src/game/game.js';
+import { priceFactor, reputationFactor } from '../src/game/demand.js';
 import { nextReputation } from '../src/game/reputation.js';
-import { QueueSimulation } from '../src/sim/engine.js';
+import { lostCustomers, stockMiss } from '../src/game/challenges.js';
+import { servedAtOnce } from '../src/game/tips.js';
+import { EVENT, QueueSimulation } from '../src/sim/engine.js';
 
 /** The share of the starting setup's sales income that should be left as profit. */
 export const STARTING_PROFIT_SHARE = 0.05;
@@ -119,6 +125,61 @@ export function cashByRule() {
   return { ingredients, wages, rent: COSTS.rent, cash: ingredients + wages + COSTS.rent };
 }
 
+/** The careful owner the growth of the second week is measured against. */
+export const CAREFUL = Object.freeze({ staff: 3, price: 13_000 });
+
+/**
+ * GROWTH. By the second week a careful owner has a higher price and a good
+ * name, and the lunch peak no longer fills the counter. The growth factor is
+ * what brings the traffic intensity of that hour, a = λ ÷ (c·μ), back to 1.
+ *
+ * The reputation is the one the expected course gives on the morning the
+ * growth starts; the course itself is computed without the growth up to
+ * that day, so the rule does not depend on its own answer.
+ */
+export function growthByRule() {
+  const reputation = expectedCourse(fresh(), CAREFUL).days[GROWTH.fromDay - 1].reputation;
+  const peak = Math.max(...DEMAND.baseProfile) * priceFactor(CAREFUL.price) * reputationFactor(reputation);
+  const capacity = CAREFUL.staff * SERVICE.baseRate;
+  return { reputation, peak, capacity, intensity: peak / capacity, exact: capacity / peak, factor: Math.round((capacity / peak) * 10) / 10 };
+}
+
+/** A full day of tips is worth this share of what the starting setup earns in a day. */
+export const TIPS_PROFIT_SHARE = 0.25;
+const TIP_CHANCE_STEP = 0.05;
+
+/**
+ * How many customers a day are served the moment they arrive, at the
+ * starting setup with its first day's stock. Simulated: the solver knows how
+ * long customers wait on average, not how many of them did not wait at all.
+ */
+export function servedAtOnceSample(days = 2000) {
+  const { model } = expectedDay(fresh(), startDecisions());
+  let count = 0;
+  for (let replication = 0; replication < days; replication++) {
+    const simulation = new QueueSimulation({ ...model, stock: START.stock, seed: 777, replication });
+    while (!simulation.finished) {
+      const record = simulation.step();
+      if (record?.type === EVENT.DEPARTURE && servedAtOnce(record.customer)) count++;
+    }
+  }
+  return count / days;
+}
+
+/**
+ * TIPS. The chance that a customer who is served at once leaves a coin, such
+ * that every coin of a day comes to TIPS_PROFIT_SHARE of that day's profit.
+ */
+export function tipsByRule() {
+  const { profit } = expectedDay(fresh(), startDecisions());
+  const servedAtOnce = servedAtOnceSample();
+  const coins = (TIPS_PROFIT_SHARE * profit) / TIPS.amount;
+  const exact = coins / servedAtOnce;
+  // Counted in steps, so that 0.2 comes out as 0.2 and not as 4 x 0.05.
+  const chance = Math.round(exact / TIP_CHANCE_STEP) / Math.round(1 / TIP_CHANCE_STEP);
+  return { profit, servedAtOnce, coins, exact, chance, perDay: chance * servedAtOnce * TIPS.amount };
+}
+
 /**
  * The expected course of a game under a fixed policy.
  *
@@ -140,7 +201,7 @@ export function expectedCourse(state, policy = {}) {
     const decisions = { ...startDecisions(), seats: current.seatsOwned, ...overrides };
     const expected = expectedDay(current, decisions);
     days.push({ reputation: current.reputation, profit: expected.profit, score: expected.score });
-    current = { ...current, reputation: nextReputation(current.reputation, expected.score) };
+    current = { ...current, day: day + 1, reputation: nextReputation(current.reputation, expected.score) };
   }
   return {
     days,
@@ -152,7 +213,7 @@ export function expectedCourse(state, policy = {}) {
 /** The most profitable fixed number of pegawai over the game, at a given price. */
 export function bestFixedStaff(state, overrides = {}) {
   let best = { profit: -Infinity };
-  for (let staff = 1; staff <= 5; staff++) {
+  for (let staff = LIMITS.staff.min; staff <= LIMITS.staff.max; staff++) {
     const course = expectedCourse(state, { ...overrides, staff });
     if (course.profit > best.profit) best = { ...course, staff };
   }
@@ -161,7 +222,8 @@ export function bestFixedStaff(state, overrides = {}) {
 
 /** The most profitable schedule of pegawai per shift over the game. */
 export function bestShifts(state, overrides = {}) {
-  const options = [1, 2, 3, 4];
+  // With the busier second week a shift can need more than four; one pegawai is never the best for a whole shift.
+  const options = [2, 3, 4, 5, 6];
   let best = { profit: -Infinity };
   for (const a of options) for (const b of options) for (const c of options) for (const d of options) {
     const course = expectedCourse(state, { ...overrides, shifts: [a, b, c, d] });
@@ -232,14 +294,71 @@ export function eventEffects() {
 }
 
 /**
+ * CHALLENGES. The median day of a careful owner, on each measure a challenge
+ * uses, and the reward that makes all fourteen stamps worth one ordinary
+ * day's expected profit at the starting setup.
+ */
+export function challengesByRule(games = 200) {
+  const careful = POLICIES.find((item) => item.id === 'careful').policy;
+  const days = { servedShare: [], reneged: [], lost: [], stockMiss: [] };
+  for (let game = 0; game < games; game++) {
+    let state = newGame(1000 + game);
+    while (state.status === STATUS.PLAYING) {
+      const decisions = { ...defaultDecisions(state), ...careful(state) };
+      const perPortion = ingredientCost(morningNews(eventForDay(state.seed, state.day)));
+      decisions.stock = Math.min(decisions.stock, Math.floor(state.cash / perPortion));
+      const { state: next, report } = playDay(state, decisions);
+      const { results } = report;
+      days.servedShare.push(results.served / results.arrivals);
+      days.reneged.push(results.reneged);
+      days.lost.push(lostCustomers(results));
+      days.stockMiss.push(stockMiss(results));
+      state = next;
+    }
+  }
+  const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const { profit } = expectedDay(fresh(), startDecisions());
+  return {
+    // Rounded down to a step of 5%: "nine in ten" is a goal, "90.8%" is not.
+    servedShare: Math.floor(median(days.servedShare) * 20) / 20,
+    reneged: median(days.reneged),
+    lost: median(days.lost),
+    stockMiss: median(days.stockMiss),
+    profit,
+    reward: Math.floor(profit / DAY.count / 1000) * 1000,
+  };
+}
+
+/**
+ * Plays a day the way the most attentive player could: every coin a customer
+ * leaves on the counter is picked up the moment it is left. It is the most
+ * that tips can ever add to a day.
+ */
+export function playDayTakingEveryTip(state, decisions) {
+  const day = startDay(state, decisions);
+  while (!day.simulation.finished) {
+    const record = day.simulation.step();
+    if (record?.type !== EVENT.DEPARTURE) continue;
+    const coin = day.tips.leave(record.customer, record.time);
+    if (coin) day.tips.take(coin.id, record.time);
+  }
+  return day.finish();
+}
+
+/**
  * Plays whole games with a policy and summarizes how they end.
  *
  * @param {(state: object) => object} policy decisions to override each day
+ * @param {number} [games]
+ * @param {object} [options]
+ * @param {boolean} [options.tips] every coin of every day is picked up; without it, none is
  */
-export function playGames(policy, games = 300) {
+export function playGames(policy, games = 300, { tips = false } = {}) {
+  const play = tips ? playDayTakingEveryTip : playDay;
   const finalCash = [];
   let bankrupt = 0;
   let reputation = 0;
+  let tipsTaken = 0;
   for (let game = 0; game < games; game++) {
     let state = newGame(1000 + game);
     while (state.status === STATUS.PLAYING) {
@@ -247,15 +366,18 @@ export function playGames(policy, games = 300) {
       // Nobody can prepare more than they can pay for, at today's price of ingredients.
       const perPortion = ingredientCost(morningNews(eventForDay(state.seed, state.day)));
       decisions.stock = Math.min(decisions.stock, Math.floor(state.cash / perPortion));
-      state = playDay(state, decisions).state;
+      state = play(state, decisions).state;
     }
     if (state.status === STATUS.BANKRUPT) bankrupt++;
     finalCash.push(state.cash);
     reputation += state.reputation;
+    tipsTaken += state.history.reduce((total, report) => total + report.ledger.tips, 0);
   }
   finalCash.sort((a, b) => a - b);
   return {
     games,
+    /** Mean rupiah of tips picked up over a game. */
+    meanTips: tipsTaken / games,
     meanCash: finalCash.reduce((total, cash) => total + cash, 0) / games,
     lowCash: finalCash[Math.floor(0.05 * games)],
     highCash: finalCash[Math.floor(0.95 * games)],
@@ -285,7 +407,7 @@ export const POLICIES = Object.freeze([
     id: 'careful',
     name: 'careful owner',
     policy: (state) => {
-      const plan = { staff: 3, price: 13_000 };
+      const plan = { ...CAREFUL };
       const expected = expectedDay(state, { ...defaultDecisions(state), ...plan });
       return { ...plan, stock: Math.round(expected.demand) };
     },

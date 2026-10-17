@@ -215,6 +215,33 @@ const FIGURES = {
       }),
     ];
   },
+  /** A tip: a coin on the counter top, with the ring that says how long it will lie there. */
+  tip() {
+    const counter = GROUND - U * 2.2;
+    const coinY = counter - U * 1.55;
+    const r = U * 1.55;
+    const ring = U * 2.25;
+    return [
+      // The front of the counter, in the paint of the warung, and its wooden top.
+      svg('rect', { x: 6, y: counter + U * 0.9, width: 52, height: GROUND - counter - U * 0.9, style: `${INK}; stroke-width: 1.6; fill: var(--toska)` }),
+      svg('rect', { x: 6, y: counter + U * 1.5, width: 52, height: U * 0.6, style: 'fill: var(--kunyit)' }),
+      svg('rect', { x: 3, y: counter, width: 58, height: U * 1.1, rx: U * 0.3, style: `${INK}; stroke-width: 1.6; fill: var(--kayu)` }),
+      // The ring, three quarters of it left.
+      svg('path', {
+        d: `M${point(CENTER, coinY - ring)} A${ring} ${ring} 0 1 1 ${point(CENTER - ring, coinY)}`,
+        style: 'fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round',
+      }),
+      svg('circle', { cx: CENTER, cy: coinY, r, style: `${INK}; stroke-width: 1.6; fill: var(--kunyit)` }),
+      svg('circle', { cx: CENTER, cy: coinY, r: r - 3, style: 'fill: none; stroke: var(--kunyit-deep); stroke-width: 2; opacity: 0.6' }),
+      svg('text', {
+        x: CENTER,
+        y: coinY + U * 0.5,
+        'text-anchor': 'middle',
+        style: `font: 800 ${U * 1.25}px var(--font-display); fill: var(--ink)`,
+        text: 'Rp',
+      }),
+    ];
+  },
   /** Gave up waiting. */
   reneged() {
     const { parts, headY } = person(CENTER, GROUND, { shirt: 'var(--baju-2)', mood: 'angry' });

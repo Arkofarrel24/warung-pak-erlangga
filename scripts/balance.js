@@ -13,16 +13,20 @@ import {
   COSTS,
   DAY,
   DEMAND,
+  CHALLENGES,
   EVENTS,
+  GROWTH,
   RENT_RISE,
   SEAT_COST,
   SHIFTS,
   STARS,
   START,
+  TIPS,
   TRAINING,
   UPGRADES,
 } from '../src/game/config.js';
 import { expectedDay } from '../src/game/forecast.js';
+import { defaultDecisions } from '../src/game/game.js';
 import {
   cashByRule,
   demandSample,
@@ -41,6 +45,11 @@ import {
   wageByRule,
   rentRiseByRule,
   RENT_RISE_FACTOR,
+  tipsByRule,
+  TIPS_PROFIT_SHARE,
+  growthByRule,
+  CAREFUL,
+  challengesByRule,
 } from './derive.js';
 
 const rupiah = (amount) => `Rp ${Math.round(amount).toLocaleString('id-ID')}`;
@@ -241,3 +250,61 @@ console.log(`  Two stars from ${rupiah(STARS.two)} (${STARS.two / START.cash} x 
 console.log(`    the best 5% of players who never change anything end on ${rupiah(still.highCash)}.`);
 console.log(`  Three stars from ${rupiah(STARS.three)}:`);
 console.log(`    the worst 5% of careful owners end on ${rupiah(careful.lowCash)}, the average on ${rupiah(careful.meanCash)}.`);
+
+// ---------------------------------------------------------------------------
+heading('12. TIPS: worth the attention, not a living');
+// ---------------------------------------------------------------------------
+
+const tips = tipsByRule();
+const stillWithTips = playGames(POLICIES.find((item) => item.id === 'unchanged').policy, 300, { tips: true });
+const carefulWithTips = playGames(POLICIES.find((item) => item.id === 'careful').policy, 300, { tips: true });
+console.log('  A customer who is served the moment they arrive, without waiting, may leave a coin');
+console.log(`  of ${rupiah(TIPS.amount)} on the counter. It lies there ${(TIPS.shelfLife * 60).toFixed(0)} minutes; the player picks it up or loses it.`);
+console.log(`  At the starting setup ${tips.servedAtOnce.toFixed(1)} customers a day are served at once.`);
+console.log(`  Rule: every coin of a day is worth ${TIPS_PROFIT_SHARE * 100}% of the day's expected profit, ${rupiah(tips.profit)}:`);
+console.log(`  ${rupiah(TIPS_PROFIT_SHARE * tips.profit)} is ${tips.coins.toFixed(1)} coins, a chance of ${(tips.exact * 100).toFixed(1)}% per customer, rounded to ${(tips.chance * 100).toFixed(0)}%.`);
+console.log(`  -> chance in the game: ${(TIPS.chance * 100).toFixed(0)}%, which is ${rupiah(tips.perDay)} on such a day.`);
+console.log('\n  The most tips can do, with every coin of every day picked up (300 games each):\n');
+console.log('  policy                     tips over a game    mean final cash        best 5%    went bankrupt');
+for (const [name, outcome] of [['never changes anything', stillWithTips], ['careful owner', carefulWithTips]]) {
+  console.log(
+    `  ${name.padEnd(25)} ${rupiah(outcome.meanTips).padStart(16)} ${rupiah(outcome.meanCash).padStart(18)} ${rupiah(outcome.highCash).padStart(14)}` +
+      `      ${(outcome.bankruptShare * 100).toFixed(0).padStart(5)} %`,
+  );
+}
+console.log(`  Two stars still take ${rupiah(STARS.two)}: tips do not carry a warung that stands still.`);
+
+// ---------------------------------------------------------------------------
+heading('13. THE SECOND WEEK IS BUSIER: a warung run well meets its queue again');
+// ---------------------------------------------------------------------------
+
+const growth = growthByRule();
+console.log(`  A careful owner (${CAREFUL.staff} pegawai, ${rupiah(CAREFUL.price)}) starts day ${GROWTH.fromDay} with a reputation of ${growth.reputation.toFixed(0)}.`);
+console.log(`  The lunch peak then brings ${growth.peak.toFixed(1)} customers an hour to a counter that serves ${growth.capacity}:`);
+console.log(`  traffic intensity a = ${growth.peak.toFixed(1)} / ${growth.capacity} = ${growth.intensity.toFixed(2)}. The queue has nearly gone.`);
+console.log(`  Rule: from day ${GROWTH.fromDay} every hour is busier by the factor that brings that peak back to a = 1:`);
+console.log(`  ${growth.capacity} / ${growth.peak.toFixed(1)} = ${growth.exact.toFixed(2)}, rounded to ${growth.factor}.`);
+console.log(`  -> growth in the game: x ${GROWTH.demandFactor} from day ${GROWTH.fromDay}, the morning the rent goes up.`);
+console.log(`\n  Price sensitivity is ${rupiah(DEMAND.priceSensitivity)} (it was Rp 7.000): the best price without a queue is`);
+console.log(`  v + s = ${rupiah(COSTS.ingredient + DEMAND.priceSensitivity)}. One decision alone, 300 games each:\n`);
+console.log('  policy                         mean final cash      worst 5%');
+for (const [name, plan] of [['price only, 2 pegawai, Rp 14.000', { price: 14_000 }], ['pegawai only, 3 at Rp 10.000', { staff: 3 }], ['both: 3 pegawai, Rp 13.000', CAREFUL]]) {
+  const outcome = playGames((state) => {
+    const expected = expectedDay(state, { ...defaultDecisions(state), ...plan });
+    return { ...plan, stock: Math.round(expected.demand) };
+  });
+  console.log(`  ${name.padEnd(30)} ${rupiah(outcome.meanCash).padStart(15)}      ${rupiah(outcome.lowCash)}`);
+}
+
+// ---------------------------------------------------------------------------
+heading('14. CHALLENGES: a careful owner meets one about every other day');
+// ---------------------------------------------------------------------------
+
+const challenges = challengesByRule();
+console.log('  Each threshold is the median day of a careful owner over 200 games:\n');
+console.log(`  served at least       ${(challenges.servedShare * 100).toFixed(0)}% of those who came     (game: ${(CHALLENGES.servedShare * 100).toFixed(0)}%)`);
+console.log(`  gave up waiting       at most ${challenges.reneged}                  (game: ${CHALLENGES.reneged})`);
+console.log(`  lost in any way       at most ${challenges.lost}                 (game: ${CHALLENGES.lost})`);
+console.log(`  stock off by          at most ${challenges.stockMiss} portions        (game: ${CHALLENGES.stockMiss})`);
+console.log(`\n  Reward: one day's expected profit, ${rupiah(challenges.profit)}, over ${DAY.count} stamps = ${rupiah(challenges.reward)} each.`);
+console.log(`  -> reward in the game: ${rupiah(CHALLENGES.reward)}; all ${DAY.count} stamps: ${rupiah(CHALLENGES.reward * DAY.count)}.`);

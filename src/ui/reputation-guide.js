@@ -56,8 +56,8 @@ export function reputationRules() {
     step('Skor hari itu.', 'Poinnya dibagi jumlah pelanggan yang datang, lalu dikali 100. Hasilnya angka dari 0 sampai 100.'),
     step(
       'Bergesernya pelan.',
-      `Reputasi bergerak ${percent(REPUTATION.memory)} ke arah skor itu. Satu hari buruk terasa, tapi tidak langsung ` +
-        'menghancurkan; satu hari bagus juga belum cukup.',
+      `Reputasi bergerak ${percent(REPUTATION.memory)} ke arah skor itu. Jadi satu hari buruk tidak langsung menjatuhkannya, ` +
+        'dan satu hari bagus belum cukup menaikkannya.',
     ),
     step(
       'Akibatnya besok.',

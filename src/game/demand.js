@@ -7,7 +7,7 @@
  * the simulation.
  */
 
-import { DEMAND } from './config.js';
+import { DEMAND, GROWTH } from './config.js';
 
 /**
  * Exponential (log-linear) demand: e^(-(p - p0)/s).
@@ -22,11 +22,19 @@ export function reputationFactor(reputation) {
   return DEMAND.reputationFloor + (DEMAND.reputationSlope * reputation) / 100;
 }
 
+/** A warung that has been open a week is known: 1 in the first week, GROWTH.demandFactor after it. */
+export function growthFactor(day) {
+  return day >= GROWTH.fromDay ? GROWTH.demandFactor : 1;
+}
+
 /**
  * λ(t) for one day, as { time, rate } points for the simulation engine:
- * the base profile scaled by the price factor and the reputation factor.
+ * the base profile scaled by the price factor, the reputation factor, and
+ * (from the second week) the growth factor.
+ *
+ * @param {number} [day] the day of the game; without it, a day of the first week
  */
-export function arrivalProfile({ price, reputation }) {
-  const factor = priceFactor(price) * reputationFactor(reputation);
+export function arrivalProfile({ price, reputation, day = 1 }) {
+  const factor = priceFactor(price) * reputationFactor(reputation) * growthFactor(day);
   return DEMAND.baseProfile.map((rate, time) => ({ time, rate: rate * factor }));
 }

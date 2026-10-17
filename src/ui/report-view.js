@@ -23,7 +23,7 @@ import { createTabs } from './controls.js';
 import { h, icon } from './dom.js';
 import { countUp, flyCoins, pop, prefersReducedMotion } from './motion.js';
 import { play } from './sound.js';
-import { EVENT_TEXT, SHOP_NAME } from './text.js';
+import { CHALLENGE_TEXT, reviewText, EVENT_TEXT, SHOP_NAME } from './text.js';
 import { whyPanel, whyTeaser } from './why-view.js';
 import {
   clock,
@@ -164,8 +164,42 @@ function eventNote(report) {
   ]);
 }
 
+/** The day's challenge, looked back on: met or not, in one line. A day saved before challenges has none. */
+function challengeNote(report) {
+  const { challenge } = report;
+  if (!challenge || !CHALLENGE_TEXT[challenge.id]) return null;
+  return h('p', { class: `challenge ${challenge.met ? 'challenge--met' : 'challenge--missed'}` }, [
+    h('span', { class: 'challenge__mark', 'aria-hidden': 'true' }, icon(challenge.met ? 'check' : 'target')),
+    h('span', {}, [h('strong', { text: 'Tantangan: ' }), `${CHALLENGE_TEXT[challenge.id]}.`]),
+    h('span', { class: 'challenge__prize num', text: challenge.met ? `tercapai, + ${rupiah(report.ledger.stamp)}` : 'belum tercapai' }),
+  ]);
+}
+
+/**
+ * A few of the day's customers, in their own words. Each is a customer the
+ * engine simulated: the number, the time they came, how long they waited,
+ * and how the visit ended are theirs. Only the sentence is written for them.
+ */
+function reviewsCard(report) {
+  if (!report.reviews?.length) return null;
+  return h('section', { class: 'card reviews', 'aria-labelledby': 'reviews-title' }, [
+    h('h2', { class: 'card__title', id: 'reviews-title' }, [icon('smile'), 'Kata pelanggan']),
+    h(
+      'ul',
+      { class: 'reviews__list' },
+      report.reviews.map((review) =>
+        h('li', { class: `review review--${review.kind}` }, [
+          h('p', { class: 'review__words', text: `“${reviewText(review)}”` }),
+          h('p', { class: 'review__who', text: `Pelanggan ke-${integer(review.customer)}, datang pukul ${clock(review.arrivedAt)}` }),
+        ]),
+      ),
+    ),
+    h('p', { class: 'card__note', text: 'Diambil dari pelanggan yang benar-benar disimulasikan hari ini. Lama menunggu dan akhir kunjungannya sesuai catatan mesin.' }),
+  ]);
+}
+
 function ledgerNota(report) {
-  const { ledger, results, decisions } = report;
+  const { ledger, results, decisions, tips } = report;
   const row = (label, amount, note, className = '') =>
     h('div', { class: `nota__row ${className}` }, [
       h('dt', {}, [label, note && h('small', { text: note })]),
@@ -177,11 +211,14 @@ function ledgerNota(report) {
     h('h2', { class: 'nota__title', id: 'ledger-title', text: `Nota hari ke-${report.day}` }),
     h('dl', { class: 'nota__rows' }, [
       row('Pendapatan', rupiah(ledger.revenue), `${integer(results.served)} porsi × ${rupiah(decisions.price)}`),
+      // The coins left on the counter, on a day when there were any: also when none was picked up.
+      tips?.left > 0 &&
+        row('Tip', rupiah(ledger.tips), `${integer(tips.taken)} dari ${integer(tips.left)} koin di konter terpungut`),
       row(
         'Bahan',
         rupiah(-ledger.ingredients),
         results.stockLeft > 0
-          ? `${integer(decisions.stock)} porsi; ${integer(results.stockLeft)} terbuang (${rupiah(ledger.waste)})`
+          ? `${integer(decisions.stock)} porsi, ${integer(results.stockLeft)} terbuang (${rupiah(ledger.waste)})`
           : `${integer(decisions.stock)} porsi, habis terjual`,
       ),
       row(
@@ -196,6 +233,7 @@ function ledgerNota(report) {
     ]),
     h('dl', { class: 'nota__rows nota__rows--cash' }, [
       row('Kas pagi', rupiah(ledger.cashBefore)),
+      ledger.stamp > 0 && row('Cap tantangan', signedRupiah(ledger.stamp), CHALLENGE_TEXT[report.challenge.id].toLowerCase()),
       ledger.purchases > 0 && row(`Belanja di ${SHOP_NAME}`, rupiah(-ledger.purchases), 'bangku, pelatihan, atau peralatan'),
       row('Kas malam', rupiah(ledger.cashAfter), null, 'nota__row--total'),
     ]),
@@ -301,7 +339,7 @@ function metricsCard(report, rows) {
       metric({
         symbol: 'Wq',
         name: 'Rata-rata waktu tunggu',
-        value: results.Wq === null ? '—' : decimal(results.Wq * 60, 1),
+        value: results.Wq === null ? '-' : decimal(results.Wq * 60, 1),
         unit: 'menit',
         note:
           'Untuk pelanggan yang akhirnya dilayani.' +
@@ -360,8 +398,8 @@ function hourlyTable(rows) {
           cell(integer(row.reneged)),
           cell(integer(row.rejected)),
           cell(integer(row.soldOut)),
-          cell(row.rho === null ? '—' : decimal(row.rho, 2)),
-          cell(row.Wq === null ? '—' : decimal(row.Wq * 60, 1)),
+          cell(row.rho === null ? '-' : decimal(row.rho, 2)),
+          cell(row.Wq === null ? '-' : decimal(row.Wq * 60, 1)),
         ]),
       ),
     ),
@@ -502,7 +540,7 @@ export function trendsCard(history, charts) {
                 h('th', { scope: 'row' }, h('a', { href: `#/laporan/${report.day}`, text: `Hari ${report.day}` })),
                 h('td', { class: `num ${report.ledger.profit >= 0 ? 'is-profit' : 'is-loss'}`, text: signedRupiah(report.ledger.profit) }),
                 h('td', { class: 'num', text: decimal(report.reputationAfter, 0) }),
-                h('td', { class: 'num', text: report.results.Wq === null ? '—' : decimal(report.results.Wq * 60, 1) }),
+                h('td', { class: 'num', text: report.results.Wq === null ? '-' : decimal(report.results.Wq * 60, 1) }),
                 h('td', { class: 'num', text: integer(report.results.reneged) }),
                 h('td', { class: 'num', text: integer(report.results.rejected) }),
               ]),
@@ -549,7 +587,9 @@ export function renderReport(container, { store }, day) {
         panel: [
           eventNote(report),
           whyTeaser(report, () => tabs.select('kenapa', { focus: true })),
+          challengeNote(report),
           h('div', { class: 'report__pair' }, [ledgerNota(report), customersCard(report.results)]),
+          reviewsCard(report),
         ],
       },
       {
@@ -557,7 +597,7 @@ export function renderReport(container, { store }, day) {
         id: 'kenapa',
         label: 'Kenapa?',
         icon: 'info',
-        panel: [whyPanel(report)],
+        panel: [whyPanel(report, { canShop: game.status === STATUS.PLAYING })],
       },
       {
         id: 'antrean',

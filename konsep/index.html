@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Konsep ulang · Warung Pak Erlangga</title>
+    <meta name="description" content="Pratinjau konsep desain baru untuk Warung Pak Erlangga, berjalan di atas mesin simulasi yang sama." />
+    <meta name="theme-color" content="#0d1513" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Icons: Phosphor, bold weight only. -->
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/bold/style.css" />
+    <!-- The street scene takes its colors from the game's own tokens. -->
+    <link rel="stylesheet" href="../styles/tokens.css" />
+    <link rel="stylesheet" href="konsep.css" />
+    <script type="module" src="konsep.js"></script>
+  </head>
+  <body>
+    <p class="note">
+      Pratinjau konsep desain, berjalan di atas mesin simulasi yang sama. Toko, tutorial, dan grafik belum ada di sini.
+      <a href="../">Kembali ke versi sekarang</a>
+    </p>
+
+    <header class="bar">
+      <a class="bar__name" href="#" id="home-link">Warung Pak Erlangga</a>
+      <!-- Where in the day the player is: the three parts every day goes through. -->
+      <ol class="track" id="track" aria-label="Bagian hari"></ol>
+      <dl class="stats" id="stats"></dl>
+    </header>
+
+    <main class="shell" id="shell">
+      <!-- The warung stays on screen through the whole day; only the panel beside it changes. -->
+      <section class="stage" aria-label="Warung">
+        <div class="stage__frame">
+          <canvas class="stage__canvas" id="canvas" aria-hidden="true"></canvas>
+          <div class="stage__foot" id="stage-foot"></div>
+        </div>
+        <ol class="days" id="days" aria-label="Empat belas hari"></ol>
+        <!-- What backs up the panel: the hours of yesterday in the morning, the marks at midday, the hours of today at night. -->
+        <div class="under" id="under"></div>
+      </section>
+
+      <section class="panel" id="panel" aria-live="off"></section>
+    </main>
+
+    <section class="acts" id="acts" aria-labelledby="acts-title" hidden>
+      <h2 id="acts-title">Satu hari, tiga waktu</h2>
+      <ol class="acts__list">
+        <li>
+          <h3>Pagi</h3>
+          <p>Atur pegawai, harga, stok, dan bangku. Lapaknya langsung berubah di depan matamu.</p>
+        </li>
+        <li>
+          <h3>Siang</h3>
+          <p>Warung buka. Tiap pelanggan yang datang, menunggu, dan pulang dihitung satu per satu.</p>
+        </li>
+        <li>
+          <h3>Malam</h3>
+          <p>Baca hasilnya, dan apa yang paling mahal hari itu. Besok coba lebih baik.</p>
+        </li>
+      </ol>
+    </section>
+
+    <noscript><p class="note">Pratinjau ini membutuhkan JavaScript.</p></noscript>
+  </body>
+</html>
